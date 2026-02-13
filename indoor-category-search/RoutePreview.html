@@ -1,0 +1,47 @@
+<section class="route-preview">
+  <div class="route-preview-header">
+    <h2 class="route-title">Route Preview</h2>
+  </div>
+  
+  <div class="route-info">
+    <div class="route-point start-point">
+      <div class="point-label">Start</div>
+      <div class="point-name" id="startName">-</div>
+      <div class="point-details" id="startDetails">-</div>
+    </div>
+    
+    <div class="route-distance">
+      <div class="distance-value" id="distanceValue">-</div>
+      <div class="distance-label">Distance</div>
+    </div>
+    
+    <div class="route-point end-point">
+      <div class="point-label">Destination</div>
+      <div class="point-name" id="endName">-</div>
+      <div class="point-details" id="endDetails">-</div>
+    </div>
+  </div>
+  
+  <div class="map-container">
+    <div id="poiTooltip" class="poi-tooltip"></div>
+    <svg id="floorMap" class="floor-map" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+      <!-- POI markers will be drawn here -->
+    </svg>
+    <div class="map-legend">
+      <div class="legend-item">
+        <span class="legend-marker start-marker"></span>
+        <span>Start</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-marker end-marker"></span>
+        <span>Destination</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-marker poi-marker"></span>
+        <span>Other POIs</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="route-summary" id="routeSummary"></div>
+</section>

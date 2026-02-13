@@ -228,6 +228,290 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     return { pois: normalized, minLat, maxLat, minLon, maxLon };
   };
 
+  // Normalizes ALL POIs into the same SVG coordinate space for an overview map.
+  const normalizeCoordinatesOverview = (pois) => {
+    const list = (pois || []).filter((p) => p?.location && typeof p.location.latitude === "number" && typeof p.location.longitude === "number");
+    if (list.length === 0) return { pois: [], minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
+
+    const lats = list.map((poi) => poi.location.latitude);
+    const lons = list.map((poi) => poi.location.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+
+    const latRange = maxLat - minLat || 0.001;
+    const lonRange = maxLon - minLon || 0.001;
+
+    const normalized = list.map((poi) => ({
+      ...poi,
+      x: ((poi.location.longitude - minLon) / lonRange) * 380 + 10,
+      y: ((maxLat - poi.location.latitude) / latRange) * 280 + 10
+    }));
+
+    return { pois: normalized, minLat, maxLat, minLon, maxLon };
+  };
+
+  const getBuildingBoxes = (normalizedPois, padding = 14) => {
+    const byBuilding = new Map();
+    (normalizedPois || []).forEach((p) => {
+      const buildingId = String(p?.building_id ?? "");
+      if (!buildingId) return;
+      if (!byBuilding.has(buildingId)) byBuilding.set(buildingId, []);
+      byBuilding.get(buildingId).push(p);
+    });
+
+    const boxes = new Map();
+    byBuilding.forEach((items, buildingId) => {
+      const xs = items.map((p) => p.x);
+      const ys = items.map((p) => p.y);
+      const minX = Math.min(...xs) - padding;
+      const maxX = Math.max(...xs) + padding;
+      const minY = Math.min(...ys) - padding;
+      const maxY = Math.max(...ys) + padding;
+      boxes.set(buildingId, { buildingId, minX, maxX, minY, maxY });
+    });
+
+    return boxes;
+  };
+
+  const createSvgEl = (tag) => document.createElementNS("http://www.w3.org/2000/svg", tag);
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const getBoundsFromBoxes = (boxes) => {
+    const list = [...(boxes?.values?.() ?? [])];
+    if (list.length === 0) return null;
+    return {
+      minX: Math.min(...list.map((b) => b.minX)),
+      maxX: Math.max(...list.map((b) => b.maxX)),
+      minY: Math.min(...list.map((b) => b.minY)),
+      maxY: Math.max(...list.map((b) => b.maxY))
+    };
+  };
+
+  const getSegmentRectIntersections = (start, end, rect) => {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const eps = 1e-6;
+
+    const points = [];
+    const addPoint = (x, y, t) => {
+      if (t < -eps || t > 1 + eps) return;
+      if (x < rect.minX - eps || x > rect.maxX + eps) return;
+      if (y < rect.minY - eps || y > rect.maxY + eps) return;
+      points.push({ x, y, t });
+    };
+
+    // Vertical edges: x = minX/maxX
+    if (Math.abs(dx) > eps) {
+      const t1 = (rect.minX - start.x) / dx;
+      addPoint(rect.minX, start.y + t1 * dy, t1);
+      const t2 = (rect.maxX - start.x) / dx;
+      addPoint(rect.maxX, start.y + t2 * dy, t2);
+    }
+
+    // Horizontal edges: y = minY/maxY
+    if (Math.abs(dy) > eps) {
+      const t3 = (rect.minY - start.y) / dy;
+      addPoint(start.x + t3 * dx, rect.minY, t3);
+      const t4 = (rect.maxY - start.y) / dy;
+      addPoint(start.x + t4 * dx, rect.maxY, t4);
+    }
+
+    // Deduplicate near-equal points
+    const unique = [];
+    points.forEach((p) => {
+      const exists = unique.some((u) => Math.abs(u.x - p.x) < 0.01 && Math.abs(u.y - p.y) < 0.01);
+      if (!exists) unique.push(p);
+    });
+
+    return unique.filter((p) => p.t >= -eps && p.t <= 1 + eps);
+  };
+
+  const getExitPointFromRect = (start, end, rect) => {
+    const intersections = getSegmentRectIntersections(start, end, rect)
+      .filter((p) => p.t > 1e-6 && p.t < 1 - 1e-6)
+      .sort((a, b) => a.t - b.t);
+    return intersections.length > 0 ? intersections[0] : null;
+  };
+
+  const drawOverviewMap = (poiData, startId, endId, showRoute = false) => {
+    if (!floorMapEl) return { boxes: new Map(), normalizedPois: [] };
+    floorMapEl.innerHTML = "";
+
+    const { pois: normalizedPois } = normalizeCoordinatesOverview(poiData);
+    if (normalizedPois.length === 0) {
+      floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">No POIs available</text>`;
+      return { boxes: new Map(), normalizedPois: [] };
+    }
+
+    const boxes = getBuildingBoxes(normalizedPois, 16);
+
+    // Draw building boxes first (behind POIs)
+    boxes.forEach((b) => {
+      const rect = createSvgEl("rect");
+      rect.setAttribute("x", String(b.minX));
+      rect.setAttribute("y", String(b.minY));
+      rect.setAttribute("width", String(b.maxX - b.minX));
+      rect.setAttribute("height", String(b.maxY - b.minY));
+      rect.setAttribute("class", "building-box");
+      rect.setAttribute("data-building-id", b.buildingId);
+      floorMapEl.appendChild(rect);
+
+      const label = createSvgEl("text");
+      label.setAttribute("x", String(b.minX + 6));
+      label.setAttribute("y", String(b.minY + 12));
+      label.setAttribute("class", "building-label");
+      label.textContent = `B${b.buildingId}`;
+      floorMapEl.appendChild(label);
+    });
+
+    // Draw route polyline (overview) if requested
+    if (showRoute && startId && endId) {
+      const startPoi = normalizedPois.find((p) => String(p.id) === String(startId));
+      const endPoi = normalizedPois.find((p) => String(p.id) === String(endId));
+
+      if (startPoi && endPoi) {
+        const startPoint = { x: startPoi.x, y: startPoi.y };
+        const endPoint = { x: endPoi.x, y: endPoi.y };
+
+        const startBox = boxes.get(String(startPoi.building_id));
+        const endBox = boxes.get(String(endPoi.building_id));
+
+        let points = [startPoint, endPoint];
+
+        if (startBox && endBox && String(startBox.buildingId) !== String(endBox.buildingId)) {
+          const exitFromStart = getExitPointFromRect(startPoint, endPoint, startBox);
+          const entryToEnd = getExitPointFromRect(endPoint, startPoint, endBox); // reverse segment
+
+          if (exitFromStart && entryToEnd) {
+            points = [startPoint, { x: exitFromStart.x, y: exitFromStart.y }, { x: entryToEnd.x, y: entryToEnd.y }, endPoint];
+          }
+        }
+
+        const poly = createSvgEl("polyline");
+        poly.setAttribute(
+          "points",
+          points.map((p) => `${p.x},${p.y}`).join(" ")
+        );
+        poly.setAttribute("class", "overview-route");
+        floorMapEl.appendChild(poly);
+      }
+    }
+
+    // Draw POI markers
+    normalizedPois.forEach((poi) => {
+      const isStart = String(poi.id) === String(startId);
+      const isEnd = String(poi.id) === String(endId);
+      const isRoute = isStart || isEnd;
+
+      const poiGroup = createSvgEl("g");
+      poiGroup.setAttribute("cursor", "pointer");
+      poiGroup.setAttribute("class", "poi-marker-group");
+      poiGroup.setAttribute("data-poi-id", poi.id);
+      poiGroup.addEventListener("click", () => {
+        if (onPoiClick) onPoiClick(poi.id);
+      });
+
+      poiGroup.addEventListener("mouseenter", () => {
+        if (!poiTooltipEl || !floorMapEl) return;
+        cancelTooltipHide();
+
+        const svgPoint = floorMapEl.createSVGPoint();
+        svgPoint.x = poi.x;
+        svgPoint.y = poi.y;
+        const ctm = floorMapEl.getScreenCTM();
+        if (!ctm) return;
+        const screenPoint = svgPoint.matrixTransform(ctm);
+        showPoiTooltip(poi, screenPoint.x, screenPoint.y);
+      });
+      poiGroup.addEventListener("mouseleave", () => {
+        hidePoiTooltip(100);
+      });
+
+      const circle = createSvgEl("circle");
+      circle.setAttribute("cx", String(poi.x));
+      circle.setAttribute("cy", String(poi.y));
+      circle.setAttribute("r", isRoute ? "8" : "5");
+      circle.setAttribute("fill", isStart ? "#10b981" : isEnd ? "#ef4444" : "#6b7280");
+      circle.setAttribute("stroke", "#fff");
+      circle.setAttribute("stroke-width", "2");
+      poiGroup.appendChild(circle);
+
+      const nameLabel = createSvgEl("text");
+      nameLabel.setAttribute("x", String(poi.x));
+      nameLabel.setAttribute("y", String(poi.y + (isRoute ? 22 : 18)));
+      nameLabel.setAttribute("text-anchor", "middle");
+      nameLabel.setAttribute("font-size", "4");
+      nameLabel.setAttribute("fill", "#1d1f25");
+      nameLabel.textContent = poi.display_name || "";
+      poiGroup.appendChild(nameLabel);
+
+      floorMapEl.appendChild(poiGroup);
+    });
+
+    return { boxes, normalizedPois };
+  };
+
+  const setViewBoxToFit = (bounds, padding = 18) => {
+    if (!floorMapEl || !bounds) return;
+    const eps = 0.01;
+
+    let minX = bounds.minX - padding;
+    let maxX = bounds.maxX + padding;
+    let minY = bounds.minY - padding;
+    let maxY = bounds.maxY + padding;
+
+    let w = Math.max(eps, maxX - minX);
+    let h = Math.max(eps, maxY - minY);
+
+    // Keep 4:3 aspect ratio (matches default 400x300)
+    const targetRatio = 400 / 300;
+    const currentRatio = w / h;
+    if (currentRatio > targetRatio) {
+      const newH = w / targetRatio;
+      const diff = newH - h;
+      minY -= diff / 2;
+      maxY += diff / 2;
+      h = newH;
+    } else if (currentRatio < targetRatio) {
+      const newW = h * targetRatio;
+      const diff = newW - w;
+      minX -= diff / 2;
+      maxX += diff / 2;
+      w = newW;
+    }
+
+    // Avoid excessive zoom-in (keep a minimum viewBox size)
+    const minWidth = 220;
+    if (w < minWidth) {
+      const scale = minWidth / w;
+      const newW = w * scale;
+      const newH = h * scale;
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      minX = cx - newW / 2;
+      maxX = cx + newW / 2;
+      minY = cy - newH / 2;
+      maxY = cy + newH / 2;
+      w = newW;
+      h = newH;
+    }
+
+    // Clamp to a reasonable max to prevent tiny content
+    const maxWidth = 800;
+    w = clamp(w, eps, maxWidth);
+    h = w / (400 / 300);
+
+    floorMapEl.setAttribute("viewBox", `${minX} ${minY} ${w} ${h}`);
+  };
+
+  const resetViewBox = () => {
+    if (!floorMapEl) return;
+    floorMapEl.setAttribute("viewBox", "0 0 400 300");
+  };
+
   // Draws floor map with POIs and optionally route line.
   const drawFloorMap = (poiData, buildingId, floorId, startId, endId, showRoute = false) => {
     floorMapEl.innerHTML = "";
@@ -327,22 +611,53 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     const startPoi = startId ? poiData.find((p) => String(p.id) === String(startId)) : null;
     const endPoi = endId ? poiData.find((p) => String(p.id) === String(endId)) : null;
 
-    // Determine which building/floor to show on the map (priority: destination > start)
-    let mapBuildingId = "";
-    let mapFloorId = "";
-    if (endPoi) {
-      mapBuildingId = String(endPoi.building_id);
-      mapFloorId = String(endPoi.floor_id);
-    } else if (startPoi) {
-      mapBuildingId = String(startPoi.building_id);
-      mapFloorId = String(startPoi.floor_id);
-    }
+    const hasStart = Boolean(startPoi);
+    const hasEnd = Boolean(endPoi);
 
-    // Always draw map if we have a selected POI; route line appears only when showRoute and both points are on the shown floor.
-    if (mapBuildingId && mapFloorId) {
+    const sameBuilding = hasStart && hasEnd && startPoi.building_id === endPoi.building_id;
+    const sameFloor = hasStart && hasEnd && startPoi.floor_id === endPoi.floor_id;
+    const canUseFloorView = sameBuilding && sameFloor;
+
+    // Decide which map mode to render.
+    // - No selection: overview (show all POIs)
+    // - One selected: overview, fit to that building
+    // - Two selected:
+    //    - same building+floor => floor view
+    //    - otherwise => overview (so both are visible)
+    if (canUseFloorView) {
+      const mapBuildingId = String(startPoi.building_id);
+      const mapFloorId = String(startPoi.floor_id);
+      resetViewBox();
       drawFloorMap(poiData, mapBuildingId, mapFloorId, startId || null, endId || null, showRoute);
-    } else if (floorMapEl) {
-      floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">Select a start or destination</text>`;
+    } else {
+      const { boxes } = drawOverviewMap(poiData, startId, endId, showRoute);
+
+      // Auto-fit viewBox depending on selection state.
+      const startBuildingId = startPoi ? String(startPoi.building_id) : "";
+      const endBuildingId = endPoi ? String(endPoi.building_id) : "";
+
+      let fitBounds = null;
+      if (hasStart && hasEnd && startBuildingId && endBuildingId) {
+        const startBox = boxes.get(startBuildingId);
+        const endBox = boxes.get(endBuildingId);
+        if (startBox && endBox) {
+          fitBounds = {
+            minX: Math.min(startBox.minX, endBox.minX),
+            maxX: Math.max(startBox.maxX, endBox.maxX),
+            minY: Math.min(startBox.minY, endBox.minY),
+            maxY: Math.max(startBox.maxY, endBox.maxY)
+          };
+        }
+      } else if (hasStart && startBuildingId) {
+        fitBounds = boxes.get(startBuildingId) ?? null;
+      } else if (hasEnd && endBuildingId) {
+        fitBounds = boxes.get(endBuildingId) ?? null;
+      } else {
+        fitBounds = getBoundsFromBoxes(boxes);
+      }
+
+      if (fitBounds) setViewBoxToFit(fitBounds, 18);
+      else resetViewBox();
     }
 
     // Update route info (show partial selection even before both are chosen)
@@ -369,9 +684,6 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       routeSummaryEl.classList.remove("route-summary--success", "route-summary--unavailable");
       return;
     }
-
-    const sameBuilding = startPoi.building_id === endPoi.building_id;
-    const sameFloor = startPoi.floor_id === endPoi.floor_id;
 
     // For same-building different-floor routing, require an ACCESS connector to consider the route available.
     if (sameBuilding && !sameFloor) {

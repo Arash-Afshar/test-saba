@@ -592,6 +592,14 @@ body {
   border: 2px solid #fff;
 }
 
+.legend-boundary {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px dashed rgba(109, 40, 217, 0.7);
+  background: transparent;
+}
+
 .start-marker {
   background: #10b981;
 }
@@ -602,6 +610,27 @@ body {
 
 .poi-marker {
   background: #6b7280;
+}
+
+.building-box {
+  fill: rgba(109, 40, 217, 0.04);
+  stroke: rgba(109, 40, 217, 0.6);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+.building-label {
+  font-size: 10px;
+  font-weight: 700;
+  fill: rgba(109, 40, 217, 0.9);
+}
+
+.overview-route {
+  fill: none;
+  stroke: #6d28d9;
+  stroke-width: 3;
+  stroke-dasharray: 5 5;
+  opacity: 0.6;
 }
 
 .route-summary {

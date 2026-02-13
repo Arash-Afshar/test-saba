@@ -37,6 +37,17 @@ export function initSearchPanel({ hostId, poiData, onSelectionChange, onPreview 
 
   const compareText = (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" });
 
+  const normalizeForSearch = (value) =>
+    String(value ?? "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const tokenizeQuery = (query) =>
+    normalizeForSearch(query)
+      .split(" ")
+      .filter(Boolean);
+
   // Parses POI "data" JSON string and returns TYPE
   const getDataType = (poi) => {
     if (!poi?.data) return "";
@@ -60,12 +71,33 @@ export function initSearchPanel({ hostId, poiData, onSelectionChange, onPreview 
       type: getDataType(poi),
       isOpen: Boolean(poi?.is_open),
       ratingAvg: String(poi?.rating_data?.["ratings-average"] ?? ""),
-      ratingCount: String(poi?.rating_data?.["reviews-count"] ?? "")
+      ratingCount: String(poi?.rating_data?.["reviews-count"] ?? ""),
+      searchText: "" // filled after construction
     };
   };
 
+  const buildSearchText = (record) => {
+    const openText = record.isOpen ? "open" : "closed";
+    return normalizeForSearch(
+      [
+        record.name,
+        record.address,
+        record.category,
+        record.type,
+        `building ${record.buildingId}`,
+        `floor ${record.floorId}`,
+        record.buildingId,
+        record.floorId,
+        openText
+      ].join(" ")
+    );
+  };
+
   const pois = Array.isArray(poiData) ? poiData : [];
-  const poiRecords = pois.map(toPoiRecord).filter((p) => p.id && p.name);
+  const poiRecords = pois
+    .map(toPoiRecord)
+    .filter((p) => p.id && p.name)
+    .map((p) => ({ ...p, searchText: buildSearchText(p) }));
   const poiById = new Map(poiRecords.map((p) => [p.id, p]));
 
   // Picker state + selection state
@@ -261,25 +293,36 @@ export function initSearchPanel({ hostId, poiData, onSelectionChange, onPreview 
     });
   }
 
-  const matchesQuery = (poi, q) => {
-    if (!q) return true;
-    const name = poi.name.toLowerCase();
-    const address = poi.address.toLowerCase();
-    return name.includes(q) || address.includes(q);
+  const matchesQuery = (poi, query) => {
+    const tokens = tokenizeQuery(query);
+    if (tokens.length === 0) return true;
+    return tokens.every((t) => poi.searchText.includes(t));
   };
 
-  const getQueryRank = (poi, q) => {
+  const getQueryRank = (poi, query) => {
+    const q = normalizeForSearch(query);
     if (!q) return 0;
-    const name = poi.name.toLowerCase();
-    const address = poi.address.toLowerCase();
+
+    const name = normalizeForSearch(poi.name);
+    const address = normalizeForSearch(poi.address);
+    const category = normalizeForSearch(poi.category);
+    const type = normalizeForSearch(poi.type);
+    const buildingId = normalizeForSearch(poi.buildingId);
+    const floorId = normalizeForSearch(poi.floorId);
+
     if (name.startsWith(q)) return 0;
     if (name.includes(q)) return 1;
-    if (address.includes(q)) return 2;
-    return 3;
+    if (category.includes(q)) return 2;
+    if (type.includes(q)) return 3;
+    if (q === buildingId || `building ${buildingId}`.includes(q)) return 4;
+    if (q === floorId || `floor ${floorId}`.includes(q)) return 5;
+    if (address.includes(q)) return 6;
+    if (poi.searchText.includes(q)) return 7;
+    return 8;
   };
 
   const getFilteredPois = () => {
-    const q = pickerState.query.trim().toLowerCase();
+    const q = pickerState.query || "";
     const f = pickerState.filters;
 
     let list = poiRecords.slice();

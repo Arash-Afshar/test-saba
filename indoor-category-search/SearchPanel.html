@@ -1,26 +1,136 @@
 
-<section class="search-panel">
-  <section class="route-controls">
+<section class="search-panel" aria-label="Route selection">
+  <section class="route-fields" aria-label="Start and destination">
     <div class="field">
-      <select id="buildingSelect" class="select" aria-label="Building"></select>
+      <label class="field-label" for="startTrigger">From</label>
+      <button
+        id="startTrigger"
+        class="picker-trigger"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="locationPickerDialog"
+      >
+        <span class="picker-trigger__title" id="startTriggerTitle">Choose start</span>
+        <span class="picker-trigger__meta" id="startTriggerMeta"> </span>
+      </button>
     </div>
+
     <div class="field">
-      <select id="floorSelect" class="select" aria-label="Floor" disabled></select>
+      <label class="field-label" for="endTrigger">To</label>
+      <button
+        id="endTrigger"
+        class="picker-trigger"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="locationPickerDialog"
+      >
+        <span class="picker-trigger__title" id="endTriggerTitle">Choose destination</span>
+        <span class="picker-trigger__meta" id="endTriggerMeta"> </span>
+      </button>
     </div>
-    <div class="field">
-      <select id="categorySelect" class="select" aria-label="Category" disabled></select>
-    </div>
-    <div class="field">
-      <select id="startSelect" class="select" aria-label="Start point" disabled></select>
-    </div>
-    <div class="field">
-      <select id="destinationCategorySelect" class="select" aria-label="Destination category"></select>
-    </div>
-    <div class="field">
-      <select id="endSelect" class="select" aria-label="Destination"></select>
-    </div>
+  </section>
+
+  <section class="route-actions" aria-label="Route actions">
+    <button id="swapButton" class="button button--secondary" type="button" disabled>
+      Swap
+    </button>
+    <button id="clearButton" class="button button--secondary" type="button" disabled>
+      Clear
+    </button>
     <button id="previewButton" class="button" type="button" disabled>
       Preview route
     </button>
   </section>
+
+  <div id="routeLiveRegion" class="sr-only" aria-live="polite"></div>
+
+  <div id="locationPickerOverlay" class="picker-overlay" hidden>
+    <div
+      id="locationPickerDialog"
+      class="picker-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pickerTitle"
+    >
+      <header class="picker-header">
+        <button id="pickerCloseButton" class="button button--secondary" type="button">
+          Close
+        </button>
+        <h2 class="picker-title" id="pickerTitle">Choose a location</h2>
+      </header>
+
+      <div class="picker-body">
+        <div class="field">
+          <label class="field-label" for="pickerSearchInput">Search</label>
+          <input
+            id="pickerSearchInput"
+            class="text-input"
+            type="search"
+            inputmode="search"
+            autocomplete="off"
+            placeholder="Search by name or address"
+          />
+        </div>
+
+        <div class="picker-section">
+          <div class="picker-section-title" id="quickCategoriesTitle">Quick categories</div>
+          <div
+            id="pickerQuickChips"
+            class="chip-row"
+            role="group"
+            aria-labelledby="quickCategoriesTitle"
+          ></div>
+        </div>
+
+        <details class="picker-filters">
+          <summary class="picker-filters-summary">Filters</summary>
+
+          <div class="filters-grid">
+            <div class="field">
+              <label class="field-label" for="filterBuildingSelect">Building</label>
+              <select id="filterBuildingSelect" class="select"></select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="filterFloorSelect">Floor</label>
+              <select id="filterFloorSelect" class="select"></select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="filterCategorySelect">Category</label>
+              <select id="filterCategorySelect" class="select"></select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="filterTypeSelect">Type</label>
+              <select id="filterTypeSelect" class="select"></select>
+            </div>
+
+            <div class="field checkbox-field">
+              <label class="checkbox-label">
+                <input id="filterOpenNow" type="checkbox" />
+                Open now
+              </label>
+            </div>
+
+            <div class="field">
+              <button id="resetFiltersButton" class="button button--secondary" type="button">
+                Reset filters
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <div class="picker-results">
+          <div class="results-header">
+            <div id="pickerResultsCount" class="results-count" aria-live="polite"></div>
+          </div>
+          <div id="pickerNoResults" class="no-results" hidden>
+            No matching locations.
+          </div>
+          <div id="pickerResultsList" class="results-list" role="list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>

@@ -318,55 +318,52 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     });
   };
 
-  // Updates route preview with selected POIs. showRoute controls whether to draw route line.
+  // Updates route preview with selected POIs. showRoute controls whether to draw route line and show distance/summary.
   const updateRoutePreview = (selection, poiData, showRoute = false) => {
-    const { buildingId, floorId, startId, endId } = selection;
-    
+    const startId = selection?.startId ? String(selection.startId) : "";
+    const endId = selection?.endId ? String(selection.endId) : "";
+
     // Find POIs if they exist
     const startPoi = startId ? poiData.find((p) => String(p.id) === String(startId)) : null;
     const endPoi = endId ? poiData.find((p) => String(p.id) === String(endId)) : null;
-    
-    // Determine which building/floor to show on the map
-    // Priority: destination > start > selected building/floor from dropdowns
-    let mapBuildingId = buildingId;
-    let mapFloorId = floorId;
-    
+
+    // Determine which building/floor to show on the map (priority: destination > start)
+    let mapBuildingId = "";
+    let mapFloorId = "";
     if (endPoi) {
-      // If destination is selected, show the map of the destination POI's floor
       mapBuildingId = String(endPoi.building_id);
       mapFloorId = String(endPoi.floor_id);
     } else if (startPoi) {
-      // Otherwise, if start is selected, show the map of the start POI's floor
       mapBuildingId = String(startPoi.building_id);
       mapFloorId = String(startPoi.floor_id);
     }
-    
-    // Show map for determined building/floor even if route not complete
+
+    // Always draw map if we have a selected POI; route line appears only when showRoute and both points are on the shown floor.
     if (mapBuildingId && mapFloorId) {
       drawFloorMap(poiData, mapBuildingId, mapFloorId, startId || null, endId || null, showRoute);
+    } else if (floorMapEl) {
+      floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">Select a start or destination</text>`;
     }
-    
-    if (!buildingId || !floorId || !startId || !endId) {
+
+    // Update route info (show partial selection even before both are chosen)
+    if (startPoi) {
+      startNameEl.textContent = startPoi.display_name;
+      startDetailsEl.textContent = `Building ${startPoi.building_id}, Floor ${startPoi.floor_id}`;
+    } else {
       startNameEl.textContent = "-";
       startDetailsEl.textContent = "-";
-      endNameEl.textContent = "-";
-      endDetailsEl.textContent = "-";
-      distanceValueEl.textContent = "-";
-      routeSummaryEl.textContent = "";
-      routeSummaryEl.classList.remove("route-summary--success", "route-summary--unavailable");
-      return;
     }
 
-    if (!startPoi || !endPoi) return;
+    if (endPoi) {
+      endNameEl.textContent = endPoi.display_name;
+      endDetailsEl.textContent = `Building ${endPoi.building_id}, Floor ${endPoi.floor_id}`;
+    } else {
+      endNameEl.textContent = "-";
+      endDetailsEl.textContent = "-";
+    }
 
-    // Update route info
-    startNameEl.textContent = startPoi.display_name;
-    startDetailsEl.textContent = `Building ${startPoi.building_id}, Floor ${startPoi.floor_id}`;
-    endNameEl.textContent = endPoi.display_name;
-    endDetailsEl.textContent = `Building ${endPoi.building_id}, Floor ${endPoi.floor_id}`;
-
-    // Distance and route summary only shown when preview button is clicked (showRoute === true)
-    if (!showRoute) {
+    // Distance and route summary are only shown after preview button is clicked and both points exist.
+    if (!showRoute || !startPoi || !endPoi) {
       distanceValueEl.textContent = "-";
       routeSummaryEl.textContent = "";
       routeSummaryEl.classList.remove("route-summary--success", "route-summary--unavailable");
@@ -376,24 +373,19 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     const sameBuilding = startPoi.building_id === endPoi.building_id;
     const sameFloor = startPoi.floor_id === endPoi.floor_id;
 
-    // When different floors (same or different building): require ACCESS connector with same display_name on both floors to show route/distance
-    if (!sameFloor) {
-      const canShowRoute =
-        sameBuilding &&
-        hasAccessConnectorBetweenFloors(
-          poiData,
-          startPoi.building_id,
-          startPoi.floor_id,
-          endPoi.floor_id
-        );
+    // For same-building different-floor routing, require an ACCESS connector to consider the route available.
+    if (sameBuilding && !sameFloor) {
+      const canShowRoute = hasAccessConnectorBetweenFloors(
+        poiData,
+        startPoi.building_id,
+        startPoi.floor_id,
+        endPoi.floor_id
+      );
       if (!canShowRoute) {
         distanceValueEl.textContent = "-";
         routeSummaryEl.textContent = "Route is not available between these floors.";
         routeSummaryEl.classList.remove("route-summary--success");
         routeSummaryEl.classList.add("route-summary--unavailable");
-        if (buildingId && floorId) {
-          drawFloorMap(poiData, startPoi.building_id, startPoi.floor_id, startId, endId, showRoute);
-        }
         return;
       }
     }
@@ -416,16 +408,20 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     if (sameBuilding && sameFloor) {
       summary = "Route is found. Move to the destination.";
     } else if (sameBuilding && !sameFloor) {
-      summary = `Same building, ${floorDiff} floor${floorDiff > 1 ? "s" : ""} difference. Use elevator or stairs.`;
+      const direction = startPoi.floor_id < endPoi.floor_id ? "up" : "down";
+      summary = `Same building. Go ${direction} to Floor ${endPoi.floor_id} (${floorDiff} floor${floorDiff > 1 ? "s" : ""}) via elevator or stairs.`;
     } else {
-      summary = `Different buildings. Walk to Building ${endPoi.building_id}${floorDiff > 0 ? ` and go ${floorDiff} floor${floorDiff > 1 ? "s" : ""}` : ""}.`;
+      summary = `Different buildings. Walk to Building ${endPoi.building_id}, then go to Floor ${endPoi.floor_id}.`;
     }
+
     routeSummaryEl.textContent = summary;
-    routeSummaryEl.classList.toggle("route-summary--success", summary === "Route is found. Move to the destination.");
+    routeSummaryEl.classList.toggle("route-summary--success", sameBuilding && sameFloor);
     routeSummaryEl.classList.remove("route-summary--unavailable");
 
-    // Draw map for the determined building and floor
-    drawFloorMap(poiData, mapBuildingId, mapFloorId, startId, endId, showRoute);
+    // Redraw map for the determined building and floor (showRoute toggles line drawing when possible)
+    if (mapBuildingId && mapFloorId) {
+      drawFloorMap(poiData, mapBuildingId, mapFloorId, startId, endId, showRoute);
+    }
   };
 
   return { updateRoutePreview };

@@ -2,68 +2,50 @@
 async function bootstrap() {
   const searchPanelHost = document.querySelector("#searchPanel");
   const routePreviewHost = document.querySelector("#routePreview");
+  const cacheBust = `v=${Date.now()}`;
 
   // Load search panel HTML
-  const panelResponse = await fetch("./SearchPanel.html");
+  const panelResponse = await fetch(`./SearchPanel.html?${cacheBust}`, { cache: "no-store" });
   searchPanelHost.innerHTML = await panelResponse.text();
 
   // Load route preview HTML
-  const routePreviewResponse = await fetch("./RoutePreview.html");
+  const routePreviewResponse = await fetch(`./RoutePreview.html?${cacheBust}`, { cache: "no-store" });
   routePreviewHost.innerHTML = await routePreviewResponse.text();
 
-  const response = await fetch("./data.json");
+  const response = await fetch(`./data.json?${cacheBust}`, { cache: "no-store" });
   const INDOOR_POIS = await response.json();
-  // Unique building IDs for the building dropdown - panel sorts for display
-  const buildingOptions = [...new Set(INDOOR_POIS.map((poi) => poi.building_id))].map((id) => ({
-    value: String(id),
-    label: `Building ${id}`
-  }));
-  // POI options with buildingId, floorId, and category (poi_type) for filtering
-  const poiOptions = INDOOR_POIS.map((poi) => ({
-    value: String(poi.id),
-    label: `${poi.display_name} (Floor ${poi.floor_id})`,
-    buildingId: String(poi.building_id),
-    floorId: String(poi.floor_id),
-    categoryId: String(poi.poi_type?.id ?? ""),
-    categoryName: poi.poi_type?.name ?? ""
-  }));
 
-  let currentSelection = {};
+  let currentSelection = { startId: "", endId: "" };
+  let searchPanel = null;
+  let routePreview = null;
 
-  // Initialize search panel
-  const { initSearchPanel } = await import("./search-panel.js");
-  const searchPanel = initSearchPanel({
-    hostId: "#searchPanel",
-    buildingOptions,
-    poiOptions,
-    onSelectionChange: (selection) => {
-      currentSelection = selection;
-      if (routePreview) {
-        routePreview.updateRoutePreview(selection, INDOOR_POIS, false); // Show map
-      }
-    },
-    onPreview: () => {
-      if (routePreview) {
-        routePreview.updateRoutePreview(currentSelection, INDOOR_POIS, true); // Show route line
+  // Initialize route preview first (search panel calls onSelectionChange during init)
+  const { initRoutePreview } = await import(`./route-preview.js?${cacheBust}`);
+  routePreview = initRoutePreview({
+    hostId: "#routePreview",
+    onPoiClick: (poiId) => {
+      if (!searchPanel) return;
+      const selection = searchPanel.getCurrentSelection();
+      if (!selection.startId) {
+        searchPanel.setStart(poiId);
+      } else {
+        searchPanel.setDestination(poiId);
       }
     }
   });
 
-  // Handle POI clicks on map - set as start if no start, otherwise set as destination
-  const handlePoiClick = (poiId) => {
-    const selection = searchPanel.getCurrentSelection();
-    if (!selection.startId) {
-      searchPanel.setStart(poiId);
-    } else {
-      searchPanel.setDestination(poiId);
+  // Initialize search panel
+  const { initSearchPanel } = await import(`./search-panel.js?${cacheBust}`);
+  searchPanel = initSearchPanel({
+    hostId: "#searchPanel",
+    poiData: INDOOR_POIS,
+    onSelectionChange: (selection) => {
+      currentSelection = selection;
+      routePreview?.updateRoutePreview(selection, INDOOR_POIS, false); // Show map
+    },
+    onPreview: () => {
+      routePreview?.updateRoutePreview(currentSelection, INDOOR_POIS, true); // Show route line
     }
-  };
-
-  // Initialize route preview with POI click handler
-  const { initRoutePreview } = await import("./route-preview.js");
-  const routePreview = initRoutePreview({
-    hostId: "#routePreview",
-    onPoiClick: handlePoiClick
   });
 }
 

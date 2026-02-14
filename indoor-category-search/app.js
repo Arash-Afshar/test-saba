@@ -40,7 +40,8 @@ async function bootstrap() {
     categoryId: String(poi.poi_type?.id ?? ""),
     categoryName: poi.poi_type?.name ?? "",
     domainType: getDomainType(poi),
-    isOpen: Boolean(poi.is_open)
+    isOpen: Boolean(poi.is_open),
+    ratingData: poi.rating_data ?? null
   }));
 
   let currentSelection = {};

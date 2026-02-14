@@ -60,10 +60,333 @@ body {
 }
 
 .route-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: start;
+}
+
+/* From/To row with swap button */
+.from-to-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.from-to-boxes {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.from-to-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  min-height: 44px;
+}
+
+.from-to-trigger {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.from-to-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.from-to-field.has-selection .from-to-value {
+  color: var(--text);
+}
+
+.swap-button {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.swap-button:hover:not(:disabled) {
+  background: var(--card);
+  color: var(--primary);
+}
+
+.swap-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.swap-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Picker sheet - matches map container size */
+.picker-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.picker-sheet[hidden] {
+  display: none;
+}
+
+.picker-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(29, 31, 37, 0.5);
+}
+
+.picker-sheet__panel {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-height: 250px;
+  max-height: min(400px, 70vh);
+  background: var(--card);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.picker-sheet__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.picker-sheet__search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--card);
+}
+
+.picker-sheet__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.picker-sheet__chips .chip {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.picker-sheet__filters {
+  border: 1px solid rgba(109, 40, 217, 0.25);
+  border-radius: 10px;
+  background: rgba(109, 40, 217, 0.06);
+  overflow: hidden;
+}
+
+.filter-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.filter-toggle__icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.filter-toggle[aria-expanded="true"] .filter-toggle__icon {
+  transform: rotate(180deg);
+}
+
+.filter-content {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  border-top: 1px solid rgba(109, 40, 217, 0.2);
+}
+
+.filter-content[hidden] {
+  display: none;
+}
+
+.filter-content .filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-content .filter-row--full {
+  grid-column: 1 / -1;
+}
+
+.filter-content .filter-row > label:not(.filter-toggle-label) {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+}
+
+.filter-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(109, 40, 217, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--card);
+  color: var(--text);
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+}
+
+.filter-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.picker-sheet__status {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.picker-sheet__results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.picker-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.picker-result:hover {
+  border-color: var(--primary);
+}
+
+.picker-result--empty {
+  cursor: default;
+  color: var(--muted);
+  justify-content: center;
+}
+
+.picker-result__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.picker-result__name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.picker-result__sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.picker-result__meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.picker-result__rating {
+  font-size: 13px;
+  color: #d97706;
+}
+
+.picker-result__status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.picker-result__open {
+  color: #059669;
+}
+
+.picker-result__closed {
+  color: #dc2626;
 }
 
 .field {
@@ -246,7 +569,10 @@ body {
 .result-item:focus-visible,
 .route-step__button:focus-visible,
 .chip:focus-visible,
-.link-button:focus-visible {
+.link-button:focus-visible,
+.from-to-trigger:focus-visible,
+.swap-button:focus-visible,
+.picker-result:focus-visible {
   outline: 3px solid rgba(109, 40, 217, 0.35);
   outline-offset: 2px;
 }
@@ -350,13 +676,36 @@ body {
   text-transform: uppercase;
 }
 
-.route-steps {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-  max-height: 180px;
-  overflow: auto;
+.route-step-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.route-step-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.route-step-box .button {
+  flex-shrink: 0;
+  width: 100px;
+}
+
+.route-step-current {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 8px;
 }
 
 .route-step {
@@ -564,6 +913,10 @@ body {
   font-size: 14px;
   color: var(--text);
   line-height: 1.35;
+}
+
+.modal__dialog--success .modal__title {
+  color: #059669;
 }
 
 /* POI marker hover effect for clickable map markers */

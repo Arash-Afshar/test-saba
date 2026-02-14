@@ -240,6 +240,21 @@
     "is_open": true
   },
   {
+    "id": 68159,
+    "display_name": "Skywalk Connector",
+    "building_id": 103,
+    "floor_id": 2,
+    "poi_type": { "id": 23, "name": "CONNECTOR" },
+    "address": "Building C, Level 2, North Bridge",
+    "website": "",
+    "working_hours": "{\"working_hours\":[{\"day\":\"Mon\",\"open\":\"06:00\",\"close\":\"22:00\"}]}",
+    "data": "{\"TYPE\":\"ACCESS\"}",
+    "rating_data": { "ratings-average": "4.5", "reviews-count": "15" },
+    "images": [{ "url": "https://picsum.photos/seed/poi10/160/120" }],
+    "location": { "latitude": 53.5472, "longitude": -113.4950 },
+    "is_open": true
+  },
+  {
     "id": 68086,
     "display_name": "Diagnostics Lab",
     "building_id": 103,

@@ -8,33 +8,24 @@ export function initRoutePreview({ hostId, onPoiClick }) {
   const endNameEl = host.querySelector("#endName");
   const endDetailsEl = host.querySelector("#endDetails");
   const distanceValueEl = host.querySelector("#distanceValue");
-  const routeSummaryEl = host.querySelector("#routeSummary");
-  const routeStepsEl = host.querySelector("#routeSteps");
+  const routeStepBoxEl = host.querySelector("#routeStepBox");
+  const routeStepCurrentEl = host.querySelector("#routeStepCurrent");
+  const routeStepPrevEl = host.querySelector("#routeStepPrev");
+  const routeStepNextEl = host.querySelector("#routeStepNext");
   const floorMapEl = host.querySelector("#floorMap");
   const poiTooltipEl = host.querySelector("#poiTooltip");
 
   const errorModalEl = host.querySelector("#routeErrorModal");
   const errorModalMessageEl = host.querySelector("#routeErrorMessage");
   const errorModalCloseEl = host.querySelector("#routeErrorClose");
+  const arrivedModalEl = host.querySelector("#arrivedModal");
+  const arrivedCloseEl = host.querySelector("#arrivedClose");
 
   // Timeout for hiding tooltip - allows smooth transition from POI to tooltip
   let tooltipHideTimeout = null;
 
-  // Parses POI "data" JSON string and returns TYPE
-  const getDataType = (poi) => {
-    if (!poi.data) return "";
-    try {
-      const parsed = JSON.parse(poi.data);
-      return parsed.TYPE || "";
-    } catch {
-      return "";
-    }
-  };
-
   const getPoiTypeName = (poi) => String(poi?.poi_type?.name ?? "");
 
-  const isElevator = (poi) => getPoiTypeName(poi).toUpperCase() === "ELEVATOR";
-  const isStairs = (poi) => getPoiTypeName(poi).toUpperCase() === "STAIRS";
   const isConnector = (poi) => getPoiTypeName(poi).toUpperCase() === "CONNECTOR";
 
   // ---------- Accessible error modal ----------
@@ -68,6 +59,32 @@ export function initRoutePreview({ hostId, onPoiClick }) {
   document.addEventListener("keydown", (e) => {
     if (!isModalOpen()) return;
     if (e.key === "Escape") closeErrorModal();
+  });
+
+  // Arrived modal
+  let lastActiveBeforeArrived = null;
+  const closeArrivedModal = () => {
+    if (!arrivedModalEl) return;
+    arrivedModalEl.setAttribute("hidden", "");
+    if (lastActiveBeforeArrived && typeof lastActiveBeforeArrived.focus === "function") {
+      lastActiveBeforeArrived.focus();
+    }
+    lastActiveBeforeArrived = null;
+  };
+  const openArrivedModal = () => {
+    if (!arrivedModalEl) return;
+    lastActiveBeforeArrived = document.activeElement;
+    arrivedModalEl.removeAttribute("hidden");
+    arrivedCloseEl?.focus?.();
+  };
+  arrivedCloseEl?.addEventListener("click", closeArrivedModal);
+  arrivedModalEl?.addEventListener("click", (e) => {
+    if (e.target?.getAttribute?.("data-close") === "true") closeArrivedModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && arrivedModalEl && !arrivedModalEl.hasAttribute("hidden")) {
+      closeArrivedModal();
+    }
   });
 
   // Formats working hours JSON string into readable text
@@ -226,7 +243,13 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     return Math.sqrt(latMeters * latMeters + lonMeters * lonMeters);
   };
 
-  // Normalizes coordinates to fit SVG viewport (0-400 width, 0-300 height).
+  // Normalizes coordinates to fit inside SVG with inset margin (POIs stay inside boundary).
+  const boundaryInset = 30;
+  const poiAreaWidth = 380 - boundaryInset * 2;
+  const poiAreaHeight = 280 - boundaryInset * 2;
+  const poiAreaX = 10 + boundaryInset;
+  const poiAreaY = 10 + boundaryInset;
+
   const normalizeCoordinates = (pois, buildingId, floorId) => {
     const poisOnFloor = pois.filter(
       (poi) =>
@@ -247,8 +270,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
 
     const normalized = poisOnFloor.map((poi) => ({
       ...poi,
-      x: ((poi.location.longitude - minLon) / lonRange) * 380 + 10,
-      y: ((maxLat - poi.location.latitude) / latRange) * 280 + 10
+      x: ((poi.location.longitude - minLon) / lonRange) * poiAreaWidth + poiAreaX,
+      y: ((maxLat - poi.location.latitude) / latRange) * poiAreaHeight + poiAreaY
     }));
 
     return { pois: normalized, minLat, maxLat, minLon, maxLon };
@@ -263,7 +286,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     endId,
     segmentFromId = null,
     segmentToId = null,
-    highlightIds = []
+    highlightIds = [],
+    currentPositionPoiId = null
   }) => {
     floorMapEl.innerHTML = "";
     const { pois } = normalizeCoordinates(poiData, buildingId, floorId);
@@ -273,15 +297,44 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       return;
     }
 
-    // Floor label
+    // Building boundary box - full map size (same as empty state)
+    const boundaryRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    boundaryRect.setAttribute("x", "10");
+    boundaryRect.setAttribute("y", "10");
+    boundaryRect.setAttribute("width", "380");
+    boundaryRect.setAttribute("height", "280");
+    boundaryRect.setAttribute("fill", "none");
+    boundaryRect.setAttribute("stroke", "#94a3b8");
+    boundaryRect.setAttribute("stroke-width", "2");
+    boundaryRect.setAttribute("stroke-dasharray", "4 2");
+    floorMapEl.appendChild(boundaryRect);
+
+    // Floor label in a box
+    const floorLabelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const labelText = `Building ${buildingId}, Floor ${floorId}`;
+    const boxPadding = 6;
+    const boxHeight = 16;
+    const boxWidth = Math.min(labelText.length * 5.5 + boxPadding * 2, 140);
+    const floorLabelBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    floorLabelBox.setAttribute("x", "12");
+    floorLabelBox.setAttribute("y", "12");
+    floorLabelBox.setAttribute("width", String(boxWidth));
+    floorLabelBox.setAttribute("height", String(boxHeight));
+    floorLabelBox.setAttribute("rx", "4");
+    floorLabelBox.setAttribute("ry", "4");
+    floorLabelBox.setAttribute("fill", "#f1f5f9");
+    floorLabelBox.setAttribute("stroke", "#cbd5e1");
+    floorLabelBox.setAttribute("stroke-width", "1");
+    floorLabelGroup.appendChild(floorLabelBox);
     const floorLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    floorLabel.setAttribute("x", "12");
-    floorLabel.setAttribute("y", "18");
+    floorLabel.setAttribute("x", String(12 + boxPadding));
+    floorLabel.setAttribute("y", String(12 + boxHeight / 2 + 3));
     floorLabel.setAttribute("text-anchor", "start");
-    floorLabel.setAttribute("font-size", "10");
-    floorLabel.setAttribute("fill", "#6b7280");
-    floorLabel.textContent = `Building ${buildingId}, Floor ${floorId}`;
-    floorMapEl.appendChild(floorLabel);
+    floorLabel.setAttribute("font-size", "8");
+    floorLabel.setAttribute("fill", "#64748b");
+    floorLabel.textContent = labelText;
+    floorLabelGroup.appendChild(floorLabel);
+    floorMapEl.appendChild(floorLabelGroup);
 
     // Step segment line (only if both endpoints are on this floor and different).
     if (segmentFromId && segmentToId && String(segmentFromId) !== String(segmentToId)) {
@@ -298,6 +351,21 @@ export function initRoutePreview({ hostId, onPoiClick }) {
         line.setAttribute("stroke-linecap", "round");
         line.setAttribute("opacity", "0.8");
         floorMapEl.appendChild(line);
+      }
+    }
+
+    // Green circle around current step's POI (user's position)
+    if (currentPositionPoiId) {
+      const currentPoi = pois.find((p) => String(p.id) === String(currentPositionPoiId));
+      if (currentPoi) {
+        const youAreHereCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        youAreHereCircle.setAttribute("cx", currentPoi.x);
+        youAreHereCircle.setAttribute("cy", currentPoi.y);
+        youAreHereCircle.setAttribute("r", "18");
+        youAreHereCircle.setAttribute("fill", "none");
+        youAreHereCircle.setAttribute("stroke", "#10b981");
+        youAreHereCircle.setAttribute("stroke-width", "3");
+        floorMapEl.appendChild(youAreHereCircle);
       }
     }
 
@@ -375,9 +443,6 @@ export function initRoutePreview({ hostId, onPoiClick }) {
   };
 
   // ---------- Route planning (elevator-first) ----------
-  const getPoiById = (poiData, poiId) =>
-    poiData.find((p) => String(p.id) === String(poiId)) || null;
-
   const getPoisByBuildingFloor = (poiData, buildingId, floorId) =>
     poiData.filter(
       (p) => String(p.building_id) === String(buildingId) && String(p.floor_id) === String(floorId)
@@ -399,6 +464,16 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     );
 
   const floorDistanceMeters = (floorA, floorB) => Math.abs(Number(floorA) - Number(floorB)) * 3.5;
+
+  const ordinal = (n) => {
+    const num = Number(n);
+    const s = String(num);
+    if (s.endsWith("11") || s.endsWith("12") || s.endsWith("13")) return `${num}th`;
+    if (s.endsWith("1")) return `${num}st`;
+    if (s.endsWith("2")) return `${num}nd`;
+    if (s.endsWith("3")) return `${num}rd`;
+    return `${num}th`;
+  };
 
   const distanceBetweenPois = (a, b) =>
     calculateDistance(a.location.latitude, a.location.longitude, b.location.latitude, b.location.longitude);
@@ -516,7 +591,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     if (fromFloorId === toFloorId) {
       steps.push({
         kind: "go",
-        text: `Go to ${toPoi.display_name}.`,
+        text: `Move to the ${toPoi.display_name} point.`,
         mapView: {
           buildingId,
           floorId: fromFloorId,
@@ -678,7 +753,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       const verb = edge.kind === "ELEVATOR" ? "Take the elevator" : "Use the stairs";
       steps.push({
         kind: edge.kind === "ELEVATOR" ? "elevator" : "stairs",
-        text: `${verb} to Floor ${edge.toFloorId}.`,
+        text: `${verb} to the ${ordinal(edge.toFloorId)} floor.`,
         mapView: {
           buildingId,
           floorId: edge.fromFloorId,
@@ -698,7 +773,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     if (String(currentPoi.id) !== String(toPoi.id)) {
       steps.push({
         kind: "go",
-        text: `Go to ${toPoi.display_name}.`,
+        text: `Move to the ${toPoi.display_name} point.`,
         mapView: {
           buildingId,
           floorId: toFloorId,
@@ -805,44 +880,106 @@ export function initRoutePreview({ hostId, onPoiClick }) {
 
   // ---------- Step list + map-per-step state ----------
   let activeStepIndex = 0;
+  let arrived = false;
   /** @type {any|null} */
   let currentPlan = null;
 
-  const renderSteps = () => {
-    if (!routeStepsEl) return;
-    routeStepsEl.innerHTML = "";
+  const handleStepPrev = () => {
     const steps = currentPlan?.steps || [];
-    steps.forEach((step, idx) => {
-      const li = document.createElement("li");
-      li.className = `route-step${idx === activeStepIndex ? " route-step--active" : ""}`;
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "route-step__button";
-      btn.textContent = `${idx + 1}. ${step.text}`;
-      if (idx === activeStepIndex) btn.setAttribute("aria-current", "step");
-      btn.addEventListener("click", () => {
-        activeStepIndex = idx;
-        renderSteps();
-        const map = step.mapView;
-        if (map) {
-          drawFloorMap({
-            poiData: currentPlan.poiData,
-            buildingId: map.buildingId,
-            floorId: map.floorId,
-            startId: currentPlan.startId,
-            endId: currentPlan.endId,
-            segmentFromId: map.fromPoiId,
-            segmentToId: map.toPoiId,
-            highlightIds: map.highlightIds || []
-          });
-        }
+    if (steps.length === 0 || activeStepIndex <= 0) return;
+    if (arrived) {
+      arrived = false;
+    }
+    activeStepIndex--;
+    renderSteps();
+    const map = steps[activeStepIndex]?.mapView;
+    if (map) {
+      drawFloorMap({
+        poiData: currentPlan.poiData,
+        buildingId: map.buildingId,
+        floorId: map.floorId,
+        startId: currentPlan.startId,
+        endId: currentPlan.endId,
+        segmentFromId: map.fromPoiId,
+        segmentToId: map.toPoiId,
+        highlightIds: map.highlightIds || [],
+        currentPositionPoiId: map.fromPoiId
       });
-
-      li.appendChild(btn);
-      routeStepsEl.appendChild(li);
-    });
+    }
   };
+
+  const handleStepNext = () => {
+    const steps = currentPlan?.steps || [];
+    if (steps.length === 0) return;
+    const isLast = activeStepIndex === steps.length - 1;
+    if (isLast) {
+      arrived = true;
+      openArrivedModal();
+      renderSteps();
+      const lastMap = steps[steps.length - 1]?.mapView;
+      if (lastMap) {
+        drawFloorMap({
+          poiData: currentPlan.poiData,
+          buildingId: lastMap.buildingId,
+          floorId: lastMap.floorId,
+          startId: currentPlan.startId,
+          endId: currentPlan.endId,
+          segmentFromId: lastMap.fromPoiId,
+          segmentToId: lastMap.toPoiId,
+          highlightIds: lastMap.highlightIds || [],
+          currentPositionPoiId: lastMap.toPoiId
+        });
+      }
+    } else {
+      activeStepIndex++;
+      renderSteps();
+      const map = steps[activeStepIndex]?.mapView;
+      if (map) {
+        drawFloorMap({
+          poiData: currentPlan.poiData,
+          buildingId: map.buildingId,
+          floorId: map.floorId,
+          startId: currentPlan.startId,
+          endId: currentPlan.endId,
+          segmentFromId: map.fromPoiId,
+          segmentToId: map.toPoiId,
+          highlightIds: map.highlightIds || [],
+          currentPositionPoiId: map.fromPoiId
+        });
+      }
+    }
+  };
+
+  const renderSteps = () => {
+    const steps = currentPlan?.steps || [];
+    if (!routeStepBoxEl || !routeStepCurrentEl) return;
+
+    if (steps.length === 0) {
+      routeStepBoxEl.style.display = "none";
+      return;
+    }
+
+    routeStepBoxEl.style.display = "flex";
+    if (arrived) {
+      routeStepCurrentEl.textContent = "You are arrived.";
+      if (routeStepPrevEl) routeStepPrevEl.disabled = false;
+      if (routeStepNextEl) {
+        routeStepNextEl.textContent = "Arrived";
+        routeStepNextEl.disabled = true;
+      }
+    } else {
+      const step = steps[activeStepIndex];
+      routeStepCurrentEl.textContent = `${activeStepIndex + 1}. ${step.text}`;
+      if (routeStepPrevEl) routeStepPrevEl.disabled = activeStepIndex === 0;
+      if (routeStepNextEl) {
+        routeStepNextEl.textContent = "Next";
+        routeStepNextEl.disabled = false;
+      }
+    }
+  };
+
+  routeStepPrevEl?.addEventListener("click", handleStepPrev);
+  routeStepNextEl?.addEventListener("click", handleStepNext);
 
   // Updates route preview with selected POIs. showRoute controls whether to draw route line.
   const updateRoutePreview = (selection, poiData, showRoute = false) => {
@@ -878,10 +1015,9 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     if (!showRoute) {
       currentPlan = null;
       activeStepIndex = 0;
-      if (routeStepsEl) routeStepsEl.innerHTML = "";
+      arrived = false;
+      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
       distanceValueEl.textContent = "-";
-      routeSummaryEl.textContent = startPoi || endPoi ? "Select “Preview route” to see steps." : "";
-      routeSummaryEl.classList.remove("route-summary--success", "route-summary--unavailable");
       if (isModalOpen()) closeErrorModal();
       if (mapBuildingId && mapFloorId) {
         drawFloorMap({
@@ -891,6 +1027,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
           startId: startId || null,
           endId: endId || null
         });
+      } else {
+        floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">Select start and destination</text>`;
       }
       return;
     }
@@ -898,11 +1036,10 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     // Preview requested but missing selection.
     if (!startPoi || !endPoi) {
       distanceValueEl.textContent = "-";
-      routeSummaryEl.textContent = "Select a start and destination to preview a route.";
-      routeSummaryEl.classList.remove("route-summary--success", "route-summary--unavailable");
       currentPlan = null;
       activeStepIndex = 0;
-      if (routeStepsEl) routeStepsEl.innerHTML = "";
+      arrived = false;
+      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
       if (mapBuildingId && mapFloorId) {
         drawFloorMap({
           poiData,
@@ -919,11 +1056,9 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     if (!plan.ok) {
       currentPlan = null;
       activeStepIndex = 0;
-      if (routeStepsEl) routeStepsEl.innerHTML = "";
+      arrived = false;
+      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
       distanceValueEl.textContent = "-";
-      routeSummaryEl.textContent = "Route unavailable.";
-      routeSummaryEl.classList.remove("route-summary--success");
-      routeSummaryEl.classList.add("route-summary--unavailable");
       openErrorModal(plan.reason);
 
       // Still show a helpful map.
@@ -949,16 +1084,10 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       steps: plan.steps
     };
     activeStepIndex = 0;
+    arrived = false;
     renderSteps();
 
     distanceValueEl.textContent = `${Math.round(plan.distanceMeters)}m`;
-    if (plan.requiresStairs) {
-      routeSummaryEl.textContent = "Route found. Stairs required. Select a step to view it on the map.";
-    } else {
-      routeSummaryEl.textContent = "Route found. Select a step to view it on the map.";
-    }
-    routeSummaryEl.classList.add("route-summary--success");
-    routeSummaryEl.classList.remove("route-summary--unavailable");
 
     // Draw first step.
     const first = plan.steps[0]?.mapView;
@@ -971,7 +1100,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
         endId: String(endPoi.id),
         segmentFromId: first.fromPoiId,
         segmentToId: first.toPoiId,
-        highlightIds: first.highlightIds || []
+        highlightIds: first.highlightIds || [],
+        currentPositionPoiId: first.fromPoiId
       });
     } else if (mapBuildingId && mapFloorId) {
       drawFloorMap({

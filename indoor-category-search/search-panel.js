@@ -1,38 +1,50 @@
-// Initializes the search panel: domain/type filters, searchable start/destination pickers, and preview button.
+// Initializes the search panel: From/To picker sheet, filters, and preview button.
 export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelectionChange, onPreview }) {
-  // buildingOptions is currently unused (search-first UX), but kept for API compatibility.
-  void buildingOptions;
-
   const host = document.querySelector(hostId);
   if (!host) return;
 
-  const domainTypeChipsEl = host.querySelector("#domainTypeChips");
-  const openNowToggleEl = host.querySelector("#openNowToggle");
-  const scopingNoteEl = host.querySelector("#scopingNote");
-
-  const startSearchEl = host.querySelector("#startSearch");
-  const startResultsEl = host.querySelector("#startResults");
-  const startStatusEl = host.querySelector("#startStatus");
-  const startSelectionEl = host.querySelector("#startSelection");
-  const clearStartButtonEl = host.querySelector("#clearStartButton");
-
-  const endSearchEl = host.querySelector("#endSearch");
-  const endResultsEl = host.querySelector("#endResults");
-  const endStatusEl = host.querySelector("#endStatus");
-  const endSelectionEl = host.querySelector("#endSelection");
-  const clearEndButtonEl = host.querySelector("#clearEndButton");
-
+  const fromTriggerEl = host.querySelector("#fromTrigger");
+  const fromSelectionEl = host.querySelector("#fromSelection");
+  const toTriggerEl = host.querySelector("#toTrigger");
+  const toSelectionEl = host.querySelector("#toSelection");
   const swapButtonEl = host.querySelector("#swapButton");
   const previewButtonEl = host.querySelector("#previewButton");
+  const clearButtonEl = host.querySelector("#clearButton");
 
-  /** @type {string} "" means All */
-  let selectedDomainType = "";
-  let openNowOnly = false;
+  const pickerSheetEl = host.querySelector("#pickerSheet");
+  const pickerSearchEl = host.querySelector("#pickerSearch");
+  const pickerChipsEl = host.querySelector("#pickerChips");
+  const pickerStatusEl = host.querySelector("#pickerStatus");
+  const pickerResultsEl = host.querySelector("#pickerResults");
+  const filterToggleEl = host.querySelector("#filterToggle");
+  const filterSummaryEl = host.querySelector("#filterSummary");
+  const filterContentEl = host.querySelector("#filterContent");
+  const filterBuildingEl = host.querySelector("#filterBuilding");
+  const filterFloorEl = host.querySelector("#filterFloor");
+  const filterCategoryEl = host.querySelector("#filterCategory");
+  const filterTypeEl = host.querySelector("#filterType");
+  const filterOpenNowEl = host.querySelector("#filterOpenNow");
 
   /** @type {string} */
   let startId = "";
   /** @type {string} */
   let endId = "";
+  /** @type {"from"|"to"|null} */
+  let pickerMode = null;
+  /** @type {string} */
+  let selectedCategoryChip = "";
+  /** @type {string} */
+  let filterBuilding = "";
+  /** @type {string} */
+  let filterFloor = "";
+  /** @type {string} */
+  let filterCategory = "";
+  /** @type {string} */
+  let filterType = "";
+  /** @type {boolean} */
+  let filterOpenNow = false;
+
+  const QUICK_CATEGORIES = ["ENTRANCE", "WASHROOM", "ELEVATOR", "INFORMATION", "FOOD"];
 
   const compareByName = (a, b) =>
     (a.displayName || a.label || "").localeCompare(b.displayName || b.label || "", undefined, {
@@ -41,172 +53,110 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
 
   const getPoiById = (poiId) => poiOptions.find((p) => String(p.value) === String(poiId)) || null;
 
-  const formatPoiSummary = (poi) => {
-    if (!poi) return "";
-    const name = poi.displayName || poi.label || "Unknown location";
-    const building = poi.buildingId ? `Building ${poi.buildingId}` : "Building ?";
-    const floor = poi.floorId ? `Floor ${poi.floorId}` : "Floor ?";
-    const category = poi.categoryName ? poi.categoryName : "Location";
-    return `${name} — ${building}, ${floor} • ${category}`;
-  };
+  const formatPoiShort = (poi) => poi?.displayName || poi?.label || "Unknown";
 
-  // Builds a building adjacency graph from cross-building connector POIs.
-  // A connector is considered cross-building when a CONNECTOR with the same displayName exists in 2+ buildings.
-  const buildBuildingConnectorGraph = () => {
-    /** @type {Map<string, Set<string>>} */
-    const adjacency = new Map();
-
-    const connectors = poiOptions.filter(
-      (p) => String(p.categoryName || "").toUpperCase() === "CONNECTOR" && String(p.displayName || "").trim() !== ""
-    );
-
-    /** @type {Map<string, Set<string>>} */
-    const byName = new Map();
-    connectors.forEach((p) => {
-      const name = String(p.displayName).trim();
-      if (!byName.has(name)) byName.set(name, new Set());
-      byName.get(name).add(String(p.buildingId));
-    });
-
-    const addEdge = (a, b) => {
-      if (!adjacency.has(a)) adjacency.set(a, new Set());
-      if (!adjacency.has(b)) adjacency.set(b, new Set());
-      adjacency.get(a).add(b);
-      adjacency.get(b).add(a);
-    };
-
-    byName.forEach((buildingIds) => {
-      const ids = [...buildingIds];
-      if (ids.length < 2) return;
-      for (let i = 0; i < ids.length; i++) {
-        for (let j = i + 1; j < ids.length; j++) addEdge(ids[i], ids[j]);
-      }
-    });
-
-    return adjacency;
-  };
-
-  const connectorGraph = buildBuildingConnectorGraph();
-
-  const getReachableBuildings = (startBuildingId) => {
-    const start = String(startBuildingId || "");
-    if (!start) return null;
-
-    /** @type {Set<string>} */
-    const visited = new Set([start]);
-    /** @type {string[]} */
-    const queue = [start];
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      const neighbors = connectorGraph.get(current);
-      if (!neighbors) continue;
-      neighbors.forEach((n) => {
-        if (!visited.has(n)) {
-          visited.add(n);
-          queue.push(n);
-        }
-      });
-    }
-
-    return visited;
-  };
-
-  const getAllowedBuildingsForEndpoint = (endpoint) => {
-    // endpoint is "start" or "end"
-    if (endpoint === "end") {
-      const startPoi = getPoiById(startId);
-      return startPoi ? getReachableBuildings(startPoi.buildingId) : null;
-    }
-    const endPoi = getPoiById(endId);
-    return endPoi ? getReachableBuildings(endPoi.buildingId) : null;
+  const getRatingDisplay = (poi) => {
+    const rd = poi.ratingData || poi.rating_data;
+    if (!rd) return "";
+    const avg = rd["ratings-average"] || rd.ratingsAverage;
+    return avg ? `★ ${avg}` : "";
   };
 
   const doesPoiMatchFilters = (poi, endpoint, query) => {
     if (!poi) return false;
-
     const q = String(query || "").trim().toLowerCase();
     if (q) {
-      // Include building/floor so users can type numbers like "101" (Building 101) or "floor 2".
-      const hay = `${poi.displayName || ""} ${poi.categoryName || ""} ${poi.domainType || ""} building ${
-        poi.buildingId || ""
-      } floor ${poi.floorId || ""}`.toLowerCase();
+      const hay = `${poi.displayName || ""} ${poi.categoryName || ""} ${poi.domainType || ""} building ${poi.buildingId || ""} floor ${poi.floorId || ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
-
-    if (selectedDomainType && String(poi.domainType) !== String(selectedDomainType)) return false;
-
-    if (openNowOnly && poi.isOpen !== true) return false;
-
-    const allowedBuildings = getAllowedBuildingsForEndpoint(endpoint);
-    if (allowedBuildings && !allowedBuildings.has(String(poi.buildingId))) return false;
-
+    if (selectedCategoryChip && String(poi.categoryName || "").toUpperCase() !== selectedCategoryChip) return false;
+    if (filterBuilding && String(poi.buildingId) !== filterBuilding) return false;
+    if (filterFloor && String(poi.floorId) !== filterFloor) return false;
+    if (filterCategory && String(poi.categoryName || "").toUpperCase() !== filterCategory) return false;
+    if (filterType && String(poi.domainType) !== filterType) return false;
+    if (filterOpenNow && poi.isOpen !== true) return false;
     return true;
   };
 
-  const updateScopingNote = () => {
-    if (!scopingNoteEl) return;
-
-    if (startId) {
-      const startPoi = getPoiById(startId);
-      const allowed = getAllowedBuildingsForEndpoint("end");
-      if (startPoi && allowed) {
-        const buildings = [...allowed].sort((a, b) => Number(a) - Number(b));
-        if (buildings.length === 1) {
-          scopingNoteEl.textContent = `Destination is limited to Building ${buildings[0]} (no indoor connector to other buildings).`;
-        } else {
-          scopingNoteEl.textContent = `Destination is available in Buildings ${buildings.join(", ")}.`;
-        }
-        return;
+  const sizePickerToMap = () => {
+    const mapEl = document.querySelector("#routePreview .map-container");
+    if (mapEl && pickerSheetEl) {
+      const rect = mapEl.getBoundingClientRect();
+      const panel = pickerSheetEl.querySelector(".picker-sheet__panel");
+      if (panel) {
+        panel.style.width = `${rect.width}px`;
+        panel.style.height = `${rect.height}px`;
+        panel.style.minHeight = `${rect.height}px`;
       }
     }
-
-    if (endId) {
-      const endPoi = getPoiById(endId);
-      const allowed = getAllowedBuildingsForEndpoint("start");
-      if (endPoi && allowed) {
-        const buildings = [...allowed].sort((a, b) => Number(a) - Number(b));
-        if (buildings.length === 1) {
-          scopingNoteEl.textContent = `Start is limited to Building ${buildings[0]} (no indoor connector to other buildings).`;
-        } else {
-          scopingNoteEl.textContent = `Start is available in Buildings ${buildings.join(", ")}.`;
-        }
-        return;
-      }
-    }
-
-    scopingNoteEl.textContent = "";
   };
 
-  const clearResults = (resultsEl, statusEl) => {
-    if (resultsEl) resultsEl.innerHTML = "";
-    if (statusEl) statusEl.textContent = "";
+  const openPicker = (mode) => {
+    pickerMode = mode;
+    pickerSearchEl.value = "";
+    selectedCategoryChip = "";
+    pickerChipsEl.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
+    filterBuilding = "";
+    filterFloor = "";
+    filterCategory = "";
+    filterType = "";
+    filterOpenNow = false;
+    if (filterBuildingEl) filterBuildingEl.value = "";
+    if (filterFloorEl) filterFloorEl.value = "";
+    if (filterCategoryEl) filterCategoryEl.value = "";
+    if (filterTypeEl) filterTypeEl.value = "";
+    if (filterOpenNowEl) filterOpenNowEl.checked = false;
+    updateFilterSummary();
+
+    pickerSheetEl.hidden = false;
+    pickerSheetEl.removeAttribute("aria-hidden");
+    fromTriggerEl?.setAttribute("aria-expanded", mode === "from" ? "true" : "false");
+    toTriggerEl?.setAttribute("aria-expanded", mode === "to" ? "true" : "false");
+
+    sizePickerToMap();
+    renderPickerResults();
+    requestAnimationFrame(() => pickerSearchEl?.focus());
   };
 
-  const renderResults = (endpoint) => {
-    const isStart = endpoint === "start";
-    const query = isStart ? startSearchEl.value : endSearchEl.value;
-    const resultsEl = isStart ? startResultsEl : endResultsEl;
-    const statusEl = isStart ? startStatusEl : endStatusEl;
+  const closePickerAndFocus = (triggerEl) => {
+    pickerSheetEl.hidden = true;
+    pickerSheetEl.setAttribute("aria-hidden", "true");
+    fromTriggerEl?.setAttribute("aria-expanded", "false");
+    toTriggerEl?.setAttribute("aria-expanded", "false");
+    pickerMode = null;
+    triggerEl?.focus();
+  };
 
+  const updateFilterSummary = () => {
+    if (!filterSummaryEl) return;
+    const parts = [];
+    if (filterBuilding) parts.push(filterBuilding);
+    if (filterFloor) parts.push(filterFloor);
+    if (filterCategory) parts.push(filterCategory);
+    if (filterType) parts.push(filterType);
+    if (filterOpenNow) parts.push("Open now");
+    filterSummaryEl.textContent = parts.length ? parts.join(", ") : "Filters";
+  };
+
+  const renderPickerResults = () => {
+    if (!pickerResultsEl || !pickerMode) return;
+    const query = pickerSearchEl?.value || "";
+    const endpoint = pickerMode;
     const matches = poiOptions
       .filter((p) => doesPoiMatchFilters(p, endpoint, query))
       .sort(compareByName)
-      .slice(0, 12);
+      .slice(0, 24);
 
-    if (!resultsEl) return;
-    resultsEl.innerHTML = "";
-
-    if (statusEl) {
-      const count = matches.length;
-      statusEl.textContent = count === 0 ? "No matches." : `${count} match${count === 1 ? "" : "es"}.`;
+    pickerResultsEl.innerHTML = "";
+    if (pickerStatusEl) {
+      pickerStatusEl.textContent = matches.length === 0 ? "No matches." : `${matches.length} result${matches.length === 1 ? "" : "s"}.`;
     }
 
     if (matches.length === 0) {
       const li = document.createElement("li");
-      li.className = "results__empty";
+      li.className = "picker-result picker-result--empty";
       li.textContent = "No matches";
-      resultsEl.appendChild(li);
+      pickerResultsEl.appendChild(li);
       return;
     }
 
@@ -214,267 +164,239 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
       const li = document.createElement("li");
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "result-item";
+      btn.className = "picker-result";
       btn.dataset.poiId = String(poi.value);
-      btn.textContent = formatPoiSummary(poi);
 
+      const name = poi.displayName || poi.label || "Unknown";
+      const cat = poi.categoryName || "Location";
+      const b = poi.buildingId ? `Building ${poi.buildingId}` : "";
+      const f = poi.floorId ? `Floor ${poi.floorId}` : "";
+      const sub = [cat, b, f].filter(Boolean).join(" · ");
+      const rating = getRatingDisplay(poi);
       const openLabel = poi.isOpen ? "Open" : "Closed";
-      btn.setAttribute(
-        "aria-label",
-        `${poi.displayName || "Location"}, Building ${poi.buildingId}, Floor ${poi.floorId}, ${poi.categoryName || "category"}, ${openLabel}`
-      );
+      const openClass = poi.isOpen ? "picker-result__open" : "picker-result__closed";
+
+      btn.innerHTML = `
+        <span class="picker-result__main">
+          <span class="picker-result__name">${escapeHtml(name)}</span>
+          <span class="picker-result__sub">${escapeHtml(sub)}</span>
+        </span>
+        <span class="picker-result__meta">
+          ${rating ? `<span class="picker-result__rating">${escapeHtml(rating)}</span>` : ""}
+          <span class="picker-result__status ${openClass}">${openLabel}</span>
+        </span>
+      `;
+      btn.setAttribute("aria-label", `${name}, ${cat}, Building ${poi.buildingId}, Floor ${poi.floorId}, ${openLabel}`);
 
       btn.addEventListener("click", () => {
-        if (isStart) {
+        const mode = pickerMode;
+        const trigger = mode === "from" ? toTriggerEl : (startId ? previewButtonEl : fromTriggerEl);
+        closePickerAndFocus(trigger);
+        if (mode === "from") {
           setStart(poi.value);
-          // After selecting a start, the next common action is choosing a destination.
-          endSearchEl?.focus?.();
         } else {
           setDestination(poi.value);
-          // If a start is already selected, move to Preview; otherwise, prompt for start.
-          (startId ? previewButtonEl : startSearchEl)?.focus?.();
         }
       });
 
       li.appendChild(btn);
-      resultsEl.appendChild(li);
+      pickerResultsEl.appendChild(li);
     });
   };
 
-  const updateButtons = () => {
-    const hasStart = Boolean(startId);
-    const hasEnd = Boolean(endId);
-
-    clearStartButtonEl.disabled = !hasStart;
-    clearEndButtonEl.disabled = !hasEnd;
-    swapButtonEl.disabled = !(hasStart && hasEnd);
-
-    // Enable preview only when both points are selected.
-    previewButtonEl.disabled = !(hasStart && hasEnd);
-  };
-
-  const notifySelectionChange = () => {
-    onSelectionChange?.({
-      startId,
-      endId,
-      domainType: selectedDomainType,
-      openNowOnly
-    });
-  };
-
-  const enforceIndoorScoping = () => {
-    // If one endpoint is selected, the opposite endpoint must be in an allowed building.
-    if (startId && endId) {
-      const endPoi = getPoiById(endId);
-      const allowedForEnd = getAllowedBuildingsForEndpoint("end");
-      if (endPoi && allowedForEnd && !allowedForEnd.has(String(endPoi.buildingId))) {
-        // Clear destination if it no longer matches indoor scoping.
-        endId = "";
-        endSelectionEl.textContent = "No destination selected";
-        endSearchEl.value = "";
-        clearResults(endResultsEl, endStatusEl);
-      }
-
-      const startPoi = getPoiById(startId);
-      const allowedForStart = getAllowedBuildingsForEndpoint("start");
-      if (startPoi && allowedForStart && !allowedForStart.has(String(startPoi.buildingId))) {
-        startId = "";
-        startSelectionEl.textContent = "No start selected";
-        startSearchEl.value = "";
-        clearResults(startResultsEl, startStatusEl);
-      }
-    }
+  const escapeHtml = (s) => {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
   };
 
   const setStart = (poiId) => {
     const poi = getPoiById(poiId);
     if (!poi) return;
     startId = String(poi.value);
-    startSelectionEl.textContent = formatPoiSummary(poi);
-    startSearchEl.value = poi.displayName || "";
-    clearResults(startResultsEl, startStatusEl);
-
-    enforceIndoorScoping();
-    updateScopingNote();
+    fromSelectionEl.textContent = formatPoiShort(poi);
     updateButtons();
     notifySelectionChange();
+    if (pickerStatusEl) pickerStatusEl.textContent = `Start set to ${formatPoiShort(poi)}.`;
   };
 
   const setDestination = (poiId) => {
     const poi = getPoiById(poiId);
     if (!poi) return;
     endId = String(poi.value);
-    endSelectionEl.textContent = formatPoiSummary(poi);
-    endSearchEl.value = poi.displayName || "";
-    clearResults(endResultsEl, endStatusEl);
-
-    enforceIndoorScoping();
-    updateScopingNote();
+    toSelectionEl.textContent = formatPoiShort(poi);
     updateButtons();
     notifySelectionChange();
+    if (pickerStatusEl) pickerStatusEl.textContent = `Destination set to ${formatPoiShort(poi)}.`;
   };
 
-  // Render domain/type chips.
-  const domainTypes = [
-    ...new Set(poiOptions.map((p) => String(p.domainType || "").trim()).filter((t) => t !== ""))
-  ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const updateButtons = () => {
+    const hasStart = Boolean(startId);
+    const hasEnd = Boolean(endId);
+    clearButtonEl.disabled = !(hasStart || hasEnd);
+    swapButtonEl.disabled = !(hasStart && hasEnd);
+    previewButtonEl.disabled = !(hasStart && hasEnd);
+    fromTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasStart);
+    toTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasEnd);
+  };
 
-  const renderDomainChips = () => {
-    if (!domainTypeChipsEl) return;
-    domainTypeChipsEl.innerHTML = "";
+  const notifySelectionChange = () => {
+    onSelectionChange?.({
+      startId,
+      endId,
+      domainType: filterType,
+      openNowOnly: filterOpenNow
+    });
+  };
 
-    const createChip = (value, label) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "chip";
-      btn.dataset.value = String(value);
-      btn.setAttribute("aria-pressed", String(value) === String(selectedDomainType) ? "true" : "false");
-      btn.textContent = label;
-      btn.addEventListener("click", () => {
-        selectedDomainType = String(value);
-        // Update all pressed states.
-        domainTypeChipsEl.querySelectorAll(".chip").forEach((chip) => {
-          chip.setAttribute(
-            "aria-pressed",
-            String(chip.dataset.value) === String(selectedDomainType) ? "true" : "false"
-          );
-        });
-        // Re-render results for the currently focused input.
-        renderResults(document.activeElement === endSearchEl ? "end" : "start");
-        // If current selections no longer match filters, keep them (filters affect lists only).
+  // Populate filter dropdowns
+  const buildings = [...new Set(poiOptions.map((p) => p.buildingId).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const floors = [...new Set(poiOptions.map((p) => p.floorId).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const categories = [...new Set(poiOptions.map((p) => (p.categoryName || "").toUpperCase()).filter(Boolean))].sort();
+  const types = [...new Set(poiOptions.map((p) => p.domainType).filter(Boolean))].sort();
+
+  if (filterBuildingEl) {
+    filterBuildingEl.innerHTML = '<option value="">Select building</option>';
+    buildings.forEach((id) => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = id;
+      filterBuildingEl.appendChild(opt);
+    });
+  }
+  if (filterFloorEl) {
+    filterFloorEl.innerHTML = '<option value="">Select floor</option>';
+    floors.forEach((id) => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = id;
+      filterFloorEl.appendChild(opt);
+    });
+  }
+  if (filterCategoryEl) {
+    filterCategoryEl.innerHTML = '<option value="">Select category</option>';
+    categories.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      filterCategoryEl.appendChild(opt);
+    });
+  }
+  if (filterTypeEl) {
+    filterTypeEl.innerHTML = '<option value="">Select type</option>';
+    types.forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      filterTypeEl.appendChild(opt);
+    });
+  }
+
+  // Quick category chips
+  QUICK_CATEGORIES.forEach((cat) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.dataset.value = cat;
+    btn.setAttribute("aria-pressed", "false");
+    btn.textContent = cat;
+    btn.addEventListener("click", () => {
+      selectedCategoryChip = selectedCategoryChip === cat ? "" : cat;
+      pickerChipsEl.querySelectorAll(".chip").forEach((c) => {
+        c.setAttribute("aria-pressed", c.dataset.value === selectedCategoryChip ? "true" : "false");
       });
-      return btn;
-    };
-
-    domainTypeChipsEl.appendChild(createChip("", "All"));
-    domainTypes.forEach((t) => domainTypeChipsEl.appendChild(createChip(t, t)));
-  };
-
-  renderDomainChips();
-
-  // Wire up filters.
-  openNowToggleEl?.addEventListener("change", () => {
-    openNowOnly = Boolean(openNowToggleEl.checked);
-    renderResults(document.activeElement === endSearchEl ? "end" : "start");
+      renderPickerResults();
+    });
+    pickerChipsEl.appendChild(btn);
   });
 
-  // Wire up search inputs.
-  const attachSearchHandlers = (endpoint) => {
-    const isStart = endpoint === "start";
-    const inputEl = isStart ? startSearchEl : endSearchEl;
-    const resultsEl = isStart ? startResultsEl : endResultsEl;
-    const statusEl = isStart ? startStatusEl : endStatusEl;
-    const pickerEl = inputEl?.closest?.(".picker") || null;
-
-    if (!inputEl || !resultsEl) return;
-
-    let hideTimer = null;
-
-    const scheduleHide = () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => {
-        // Only hide if focus has fully left the picker (supports keyboard access to the results).
-        if (pickerEl && pickerEl.contains(document.activeElement)) return;
-        clearResults(resultsEl, statusEl);
-      }, 150);
-    };
-
-    const cancelHide = () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = null;
-    };
-
-    inputEl.addEventListener("input", () => renderResults(endpoint));
-    inputEl.addEventListener("focus", () => {
-      cancelHide();
-      renderResults(endpoint);
+  // Filter change handlers
+  [filterBuildingEl, filterFloorEl, filterCategoryEl, filterTypeEl].forEach((el) => {
+    el?.addEventListener("change", () => {
+      filterBuilding = filterBuildingEl?.value || "";
+      filterFloor = filterFloorEl?.value || "";
+      filterCategory = filterCategoryEl?.value || "";
+      filterType = filterTypeEl?.value || "";
+      updateFilterSummary();
+      renderPickerResults();
     });
+  });
+  filterOpenNowEl?.addEventListener("change", () => {
+    filterOpenNow = Boolean(filterOpenNowEl.checked);
+    updateFilterSummary();
+    renderPickerResults();
+  });
 
-    // Keep results visible while interacting (pointer + keyboard).
-    if (pickerEl) {
-      pickerEl.addEventListener("pointerdown", () => cancelHide());
-      pickerEl.addEventListener("pointerup", () => scheduleHide());
-      pickerEl.addEventListener("focusin", () => cancelHide());
-      pickerEl.addEventListener("focusout", () => scheduleHide());
+  // Filter toggle
+  filterToggleEl?.addEventListener("click", () => {
+    const expanded = filterContentEl?.hasAttribute("hidden");
+    filterContentEl?.toggleAttribute("hidden", !expanded);
+    filterToggleEl?.setAttribute("aria-expanded", String(expanded));
+    filterToggleEl.querySelector(".filter-toggle__icon")?.setAttribute("aria-hidden", "true");
+  });
+
+  // Picker search
+  pickerSearchEl?.addEventListener("input", () => renderPickerResults());
+  pickerSearchEl?.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
     }
+    if (e.key === "Enter") {
+      const first = pickerResultsEl?.querySelector(".picker-result:not(.picker-result--empty)");
+      if (first) first.click();
+    }
+  });
 
-    inputEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        const first = resultsEl.querySelector(".result-item");
-        if (first) {
-          e.preventDefault();
-          first.click();
-        }
-      }
-      if (e.key === "Escape") {
-        clearResults(resultsEl, statusEl);
-        inputEl.blur();
-      }
-    });
-  };
+  // Picker backdrop
+  pickerSheetEl?.querySelector(".picker-sheet__backdrop")?.addEventListener("click", () => {
+    closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
+  });
 
-  attachSearchHandlers("start");
-  attachSearchHandlers("end");
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pickerSheetEl && !pickerSheetEl.hidden) {
+      closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
+    }
+  });
 
-  // Clear buttons.
-  clearStartButtonEl?.addEventListener("click", () => {
+  // From/To triggers
+  fromTriggerEl?.addEventListener("click", () => openPicker("from"));
+  toTriggerEl?.addEventListener("click", () => openPicker("to"));
+
+  // Clear buttons
+  clearButtonEl?.addEventListener("click", () => {
     startId = "";
-    startSelectionEl.textContent = "No start selected";
-    startSearchEl.value = "";
-    clearResults(startResultsEl, startStatusEl);
-    updateScopingNote();
-    updateButtons();
-    notifySelectionChange();
-  });
-
-  clearEndButtonEl?.addEventListener("click", () => {
     endId = "";
-    endSelectionEl.textContent = "No destination selected";
-    endSearchEl.value = "";
-    clearResults(endResultsEl, endStatusEl);
-    updateScopingNote();
+    fromSelectionEl.textContent = "Search here";
+    toSelectionEl.textContent = "Choose destination";
     updateButtons();
     notifySelectionChange();
   });
 
-  // Swap button.
+  // Swap
   swapButtonEl?.addEventListener("click", () => {
     if (!startId || !endId) return;
     const prevStart = startId;
     startId = endId;
     endId = prevStart;
-
     const startPoi = getPoiById(startId);
     const endPoi = getPoiById(endId);
-    startSelectionEl.textContent = startPoi ? formatPoiSummary(startPoi) : "No start selected";
-    endSelectionEl.textContent = endPoi ? formatPoiSummary(endPoi) : "No destination selected";
-    startSearchEl.value = startPoi?.displayName || "";
-    endSearchEl.value = endPoi?.displayName || "";
-
-    updateScopingNote();
+    fromSelectionEl.textContent = startPoi ? formatPoiShort(startPoi) : "Choose start";
+    toSelectionEl.textContent = endPoi ? formatPoiShort(endPoi) : "Choose destination";
     updateButtons();
     notifySelectionChange();
   });
 
-  // Preview button.
   previewButtonEl?.addEventListener("click", () => onPreview?.());
 
-  // Initial state.
-  startSelectionEl.textContent = "No start selected";
-  endSelectionEl.textContent = "No destination selected";
-  updateScopingNote();
+  // Initial
+  fromSelectionEl.textContent = "Search here";
+  toSelectionEl.textContent = "Choose destination";
   updateButtons();
   notifySelectionChange();
 
-  // Returns methods to programmatically set start/destination from map clicks.
   return {
     setStart: (poiId) => setStart(poiId),
     setDestination: (poiId) => setDestination(poiId),
-    getCurrentSelection: () => ({
-      startId,
-      endId,
-      domainType: selectedDomainType,
-      openNowOnly
-    })
+    getCurrentSelection: () => ({ startId, endId, domainType: filterType, openNowOnly: filterOpenNow })
   };
 }

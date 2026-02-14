@@ -1,5 +1,5 @@
 // Initializes the route preview panel - displays route info and floor map visualization.
-export function initRoutePreview({ hostId, onPoiClick }) {
+export function initRoutePreview({ hostId }) {
   const host = document.querySelector(hostId);
   if (!host) return;
 
@@ -8,6 +8,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
   const endNameEl = host.querySelector("#endName");
   const endDetailsEl = host.querySelector("#endDetails");
   const distanceValueEl = host.querySelector("#distanceValue");
+  const routeStepsPanelEl = host.querySelector("#routeStepsPanel");
   const routeStepBoxEl = host.querySelector("#routeStepBox");
   const routeStepCurrentEl = host.querySelector("#routeStepCurrent");
   const routeStepPrevEl = host.querySelector("#routeStepPrev");
@@ -233,6 +234,16 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     });
   }
 
+  // Tap outside to hide tooltip (for touch devices - hover doesn't work)
+  const mapContainer = host.querySelector(".map-container");
+  if (mapContainer) {
+    mapContainer.addEventListener("click", (e) => {
+      if (!e.target.closest(".poi-marker-group") && !e.target.closest(".poi-tooltip")) {
+        hidePoiTooltip(0);
+      }
+    });
+  }
+
   // Calculates distance between two lat/long points using Euclidean distance (meters).
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     // Convert degrees to approximate meters (1 degree latitude ≈ 111,000m, longitude varies by latitude)
@@ -376,28 +387,16 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       const isHighlighted = highlightIds.some((id) => String(id) === String(poi.id));
       const isRoute = isStart || isEnd || isHighlighted;
 
-      // Wrap POI in a group for click handling
+      // Wrap POI in a group for tooltip display
       const poiGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      poiGroup.setAttribute("cursor", "pointer");
       poiGroup.setAttribute("class", "poi-marker-group");
       poiGroup.setAttribute("data-poi-id", poi.id);
-      poiGroup.setAttribute("tabindex", "0");
-      poiGroup.setAttribute("role", "button");
       poiGroup.setAttribute(
         "aria-label",
         `${poi.display_name || "Location"}, Building ${poi.building_id}, Floor ${poi.floor_id}, ${getPoiTypeName(poi) || "category"}`
       );
-      poiGroup.addEventListener("click", () => {
-        if (onPoiClick) onPoiClick(poi.id);
-      });
-      poiGroup.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          if (onPoiClick) onPoiClick(poi.id);
-        }
-      });
-      
-      // Hover + focus handlers for tooltip (not hover-only).
+
+      // Hover + focus handlers for tooltip
       const showTooltipForPoi = () => {
         if (!poiTooltipEl || !floorMapEl) return;
         
@@ -415,9 +414,12 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       };
 
       poiGroup.addEventListener("mouseenter", showTooltipForPoi);
-      poiGroup.addEventListener("focus", showTooltipForPoi);
       poiGroup.addEventListener("mouseleave", () => hidePoiTooltip(100));
-      poiGroup.addEventListener("blur", () => hidePoiTooltip(0));
+      // Tap/click for touch devices (hover doesn't work on mobile)
+      poiGroup.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showTooltipForPoi();
+      });
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", poi.x);
@@ -589,9 +591,11 @@ export function initRoutePreview({ hostId, onPoiClick }) {
     let requiresStairs = false;
 
     if (fromFloorId === toFloorId) {
+      const segDist = distanceBetweenPois(fromPoi, toPoi);
       steps.push({
         kind: "go",
         text: `Move to the ${toPoi.display_name} point.`,
+        distanceMeters: segDist,
         mapView: {
           buildingId,
           floorId: fromFloorId,
@@ -600,7 +604,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
           highlightIds: [String(fromPoi.id), String(toPoi.id)]
         }
       });
-      distanceMeters += distanceBetweenPois(fromPoi, toPoi);
+      distanceMeters += segDist;
       return { ok: true, steps, distanceMeters, requiresStairs };
     }
 
@@ -735,9 +739,11 @@ export function initRoutePreview({ hostId, onPoiClick }) {
 
       // Step: go to elevator/stairs on the current floor (only if not already there).
       if (String(currentPoi.id) !== String(fromConnector.id)) {
+        const segDist = distanceBetweenPois(currentPoi, fromConnector);
         steps.push({
           kind: "go",
           text: `Go to ${fromConnector.display_name}.`,
+          distanceMeters: segDist,
           mapView: {
             buildingId,
             floorId: edge.fromFloorId,
@@ -746,14 +752,16 @@ export function initRoutePreview({ hostId, onPoiClick }) {
             highlightIds: [String(currentPoi.id), String(fromConnector.id)]
           }
         });
-        distanceMeters += distanceBetweenPois(currentPoi, fromConnector);
+        distanceMeters += segDist;
       }
 
       // Step: take elevator/stairs to the next floor.
       const verb = edge.kind === "ELEVATOR" ? "Take the elevator" : "Use the stairs";
+      const floorDist = floorDistanceMeters(edge.fromFloorId, edge.toFloorId);
       steps.push({
         kind: edge.kind === "ELEVATOR" ? "elevator" : "stairs",
         text: `${verb} to the ${ordinal(edge.toFloorId)} floor.`,
+        distanceMeters: floorDist,
         mapView: {
           buildingId,
           floorId: edge.fromFloorId,
@@ -762,7 +770,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
           highlightIds: [String(fromConnector.id)]
         }
       });
-      distanceMeters += floorDistanceMeters(edge.fromFloorId, edge.toFloorId);
+      distanceMeters += floorDist;
       if (edge.kind === "STAIRS") requiresStairs = true;
 
       // Arrive on the next floor at a connector endpoint.
@@ -771,9 +779,11 @@ export function initRoutePreview({ hostId, onPoiClick }) {
 
     // Final step: go to destination on the destination floor.
     if (String(currentPoi.id) !== String(toPoi.id)) {
+      const segDist = distanceBetweenPois(currentPoi, toPoi);
       steps.push({
         kind: "go",
         text: `Move to the ${toPoi.display_name} point.`,
+        distanceMeters: segDist,
         mapView: {
           buildingId,
           floorId: toFloorId,
@@ -782,7 +792,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
           highlightIds: [String(currentPoi.id), String(toPoi.id)]
         }
       });
-      distanceMeters += distanceBetweenPois(currentPoi, toPoi);
+      distanceMeters += segDist;
     }
 
     return { ok: true, steps, distanceMeters, requiresStairs };
@@ -852,9 +862,11 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       if (within.requiresStairs) requiresStairs = true;
 
       // Connector step (building transition).
+      const connectorDist = distanceBetweenPois(connectorFrom, connectorTo);
       steps.push({
         kind: "connector",
         text: `Take '${connectorName}' to Building ${toBuildingId}.`,
+        distanceMeters: connectorDist,
         mapView: {
           buildingId: String(connectorTo.building_id),
           floorId: String(connectorTo.floor_id),
@@ -863,7 +875,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
           highlightIds: [String(connectorTo.id)]
         }
       });
-      distanceMeters += distanceBetweenPois(connectorFrom, connectorTo);
+      distanceMeters += connectorDist;
 
       currentPoi = connectorTo;
     }
@@ -969,7 +981,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       }
     } else {
       const step = steps[activeStepIndex];
-      routeStepCurrentEl.textContent = `${activeStepIndex + 1}. ${step.text}`;
+      const distSuffix = step.distanceMeters != null ? ` (${Math.round(step.distanceMeters)}m)` : "";
+      routeStepCurrentEl.textContent = `${activeStepIndex + 1}. ${step.text}${distSuffix}`;
       if (routeStepPrevEl) routeStepPrevEl.disabled = activeStepIndex === 0;
       if (routeStepNextEl) {
         routeStepNextEl.textContent = "Next";
@@ -1017,6 +1030,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       activeStepIndex = 0;
       arrived = false;
       if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
+      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
       distanceValueEl.textContent = "-";
       if (isModalOpen()) closeErrorModal();
       if (mapBuildingId && mapFloorId) {
@@ -1040,6 +1054,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       activeStepIndex = 0;
       arrived = false;
       if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
+      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
       if (mapBuildingId && mapFloorId) {
         drawFloorMap({
           poiData,
@@ -1058,6 +1073,7 @@ export function initRoutePreview({ hostId, onPoiClick }) {
       activeStepIndex = 0;
       arrived = false;
       if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
+      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
       distanceValueEl.textContent = "-";
       openErrorModal(plan.reason);
 
@@ -1076,7 +1092,8 @@ export function initRoutePreview({ hostId, onPoiClick }) {
 
     if (isModalOpen()) closeErrorModal();
 
-    // Success: show steps and allow map-per-step.
+    // Success: show steps panel and allow map-per-step.
+    if (routeStepsPanelEl) routeStepsPanelEl.removeAttribute("hidden");
     currentPlan = {
       poiData,
       startId: String(startPoi.id),

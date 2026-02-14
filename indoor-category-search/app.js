@@ -67,21 +67,10 @@ async function bootstrap() {
     }
   });
 
-  // Handle POI clicks on map - set as start if no start, otherwise set as destination
-  const handlePoiClick = (poiId) => {
-    const selection = searchPanel.getCurrentSelection();
-    if (!selection.startId) {
-      searchPanel.setStart(poiId);
-    } else {
-      searchPanel.setDestination(poiId);
-    }
-  };
-
-  // Initialize route preview with POI click handler
+  // Initialize route preview
   const { initRoutePreview } = await import("./route-preview.js");
   routePreview = initRoutePreview({
-    hostId: "#routePreview",
-    onPoiClick: handlePoiClick
+    hostId: "#routePreview"
   });
 }
 

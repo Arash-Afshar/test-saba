@@ -1,36 +1,9 @@
-<section class="route-preview" aria-label="Route preview">
+<section class="route-preview" aria-label="Route summary">
   <div class="route-preview-header">
-    <h2 class="route-title">Route Preview</h2>
-  </div>
-  
-  <div class="route-info">
-    <div class="route-point start-point">
-      <div class="point-label">Start</div>
-      <div class="point-name" id="startName">-</div>
-      <div class="point-details" id="startDetails">-</div>
-    </div>
-    
-    <div class="route-distance">
-      <div class="distance-value" id="distanceValue">-</div>
-      <div class="distance-label">Distance</div>
-    </div>
-    
-    <div class="route-point end-point">
-      <div class="point-label">Destination</div>
-      <div class="point-name" id="endName">-</div>
-      <div class="point-details" id="endDetails">-</div>
-    </div>
+    <h2 class="route-title">Route Summary</h2>
   </div>
 
-  <section class="route-steps-panel" aria-label="Route steps">
-    <h3 class="route-steps-title">Steps</h3>
-    <div id="routeStepBox" class="route-step-box" style="display: none;">
-      <span id="routeStepCurrent" class="route-step-text"></span>
-      <button id="routeStepPrev" class="button button--secondary" type="button">Previous</button>
-      <button id="routeStepNext" class="button button--secondary" type="button">Next</button>
-    </div>
-  </section>
-  
+  <div class="route-preview__map-wrap">
   <div class="map-container">
     <div id="poiTooltip" class="poi-tooltip"></div>
     <svg id="floorMap" class="floor-map" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
@@ -50,6 +23,37 @@
         <span>Other POIs</span>
       </div>
     </div>
+  </div>
+  </div>
+
+  <div class="route-preview__bottom">
+  <div class="route-info">
+    <div class="route-distance">
+      <div class="distance-value" id="distanceValue">-</div>
+      <div class="distance-label">Path length</div>
+    </div>
+    <div class="route-points">
+      <div class="route-point start-point">
+        <div class="point-label">Start</div>
+        <div class="point-name" id="startName">-</div>
+        <div class="point-details" id="startDetails">-</div>
+      </div>
+      <div class="route-point end-point">
+        <div class="point-label">Destination</div>
+        <div class="point-name" id="endName">-</div>
+        <div class="point-details" id="endDetails">-</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="routeStepsPanel" class="route-steps-panel" aria-label="Route steps" hidden>
+    <h3 class="route-steps-title">Steps</h3>
+    <div id="routeStepBox" class="route-step-box" style="display: none;">
+      <span id="routeStepCurrent" class="route-step-text"></span>
+      <button id="routeStepPrev" class="button button--secondary" type="button">Previous</button>
+      <button id="routeStepNext" class="button button--secondary" type="button">Next</button>
+    </div>
+  </section>
   </div>
 
   <div

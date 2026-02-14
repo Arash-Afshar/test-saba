@@ -12,6 +12,7 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
   const clearButtonEl = host.querySelector("#clearButton");
 
   const pickerSheetEl = host.querySelector("#pickerSheet");
+  const pickerCloseEl = host.querySelector("#pickerClose");
   const pickerSearchEl = host.querySelector("#pickerSearch");
   const pickerChipsEl = host.querySelector("#pickerChips");
   const pickerStatusEl = host.querySelector("#pickerStatus");
@@ -80,15 +81,25 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
 
   const sizePickerToMap = () => {
     const mapEl = document.querySelector("#routePreview .map-container");
-    if (mapEl && pickerSheetEl) {
+    const panel = pickerSheetEl?.querySelector(".picker-sheet__panel");
+    if (!panel) return;
+
+    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+    if (isLandscape && pickerSheetEl?.classList.contains("picker-sheet--landscape")) {
+      panel.style.width = "min(90vw, 800px)";
+      panel.style.height = "min(85vh, 400px)";
+      panel.style.minHeight = "250px";
+    } else if (mapEl) {
       const rect = mapEl.getBoundingClientRect();
-      const panel = pickerSheetEl.querySelector(".picker-sheet__panel");
-      if (panel) {
-        panel.style.width = `${rect.width}px`;
-        panel.style.height = `${rect.height}px`;
-        panel.style.minHeight = `${rect.height}px`;
-      }
+      panel.style.width = `${rect.width}px`;
+      panel.style.height = `${rect.height}px`;
+      panel.style.minHeight = `${rect.height}px`;
     }
+  };
+
+  const updatePickerLandscapeClass = () => {
+    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+    pickerSheetEl?.classList.toggle("picker-sheet--landscape", isLandscape && !pickerSheetEl.hidden);
   };
 
   const openPicker = (mode) => {
@@ -113,6 +124,7 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
     fromTriggerEl?.setAttribute("aria-expanded", mode === "from" ? "true" : "false");
     toTriggerEl?.setAttribute("aria-expanded", mode === "to" ? "true" : "false");
 
+    updatePickerLandscapeClass();
     sizePickerToMap();
     renderPickerResults();
     requestAnimationFrame(() => pickerSearchEl?.focus());
@@ -121,6 +133,7 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
   const closePickerAndFocus = (triggerEl) => {
     pickerSheetEl.hidden = true;
     pickerSheetEl.setAttribute("aria-hidden", "true");
+    pickerSheetEl?.classList.remove("picker-sheet--landscape");
     fromTriggerEl?.setAttribute("aria-expanded", "false");
     toTriggerEl?.setAttribute("aria-expanded", "false");
     pickerMode = null;
@@ -347,6 +360,11 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
     }
   });
 
+  // Picker close button
+  pickerCloseEl?.addEventListener("click", () => {
+    closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
+  });
+
   // Picker backdrop
   pickerSheetEl?.querySelector(".picker-sheet__backdrop")?.addEventListener("click", () => {
     closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
@@ -355,6 +373,21 @@ export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelecti
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && pickerSheetEl && !pickerSheetEl.hidden) {
       closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (pickerSheetEl && !pickerSheetEl.hidden) {
+      updatePickerLandscapeClass();
+      sizePickerToMap();
+    }
+  });
+  window.addEventListener("orientationchange", () => {
+    if (pickerSheetEl && !pickerSheetEl.hidden) {
+      setTimeout(() => {
+        updatePickerLandscapeClass();
+        sizePickerToMap();
+      }, 100);
     }
   });
 

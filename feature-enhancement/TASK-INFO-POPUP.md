@@ -23,12 +23,8 @@ Propose what the Info popup should show instead of only a floor plan update date
 ### Description
 _Write a concise description of the enhancement._
 
-_Info Popup icon appears only when user selects start/destination and path is suggested. It shows update time. Path details can be added to the Info Popup.These details are: -Time(minute) -Distance(meters) -Accessability. Accessability details show the number of facilities on the path to help user be more cautious about the path and be informed._
-
 ### Example content
 _Provide example text/structure you would show in the popup._
-
-_The proposed Info Popup file is saved as "Popup proposal.png"._
 
 ### Design suggestion
 _Provide a simple layout suggestion or hierarchy (title/sections/actions)._

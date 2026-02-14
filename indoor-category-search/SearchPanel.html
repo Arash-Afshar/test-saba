@@ -1,117 +1,13 @@
-<section class="search-panel" aria-label="Route selection">
-  <form class="route-controls" action="javascript:void(0)">
-    <div class="from-to-row">
-      <div class="from-to-boxes">
-        <div class="from-to-field">
-          <button
-            id="fromTrigger"
-            type="button"
-            class="from-to-trigger"
-            aria-label="Choose start"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-            aria-controls="pickerSheet"
-          >
-            <span id="fromSelection" class="from-to-value">Search here</span>
-          </button>
-        </div>
-        <div class="from-to-field">
-          <button
-            id="toTrigger"
-            type="button"
-            class="from-to-trigger"
-            aria-label="Choose destination"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-            aria-controls="pickerSheet"
-          >
-            <span id="toSelection" class="from-to-value">Choose destination</span>
-          </button>
-        </div>
-      </div>
-      <button id="swapButton" class="swap-button" type="button" aria-label="Swap start and destination" disabled title="Swap">
-        <svg class="swap-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
-      </button>
+<section class="search-panel">
+  <section class="route-controls">
+    <div class="field">
+      <select id="startSelect" class="select" aria-label="Start point"></select>
     </div>
-
-    <div class="actions">
-      <button id="previewButton" class="button" type="button" disabled>Preview route</button>
-      <button id="clearButton" class="button button--secondary" type="button" disabled>Clear</button>
+    <div class="field">
+      <select id="endSelect" class="select" aria-label="Destination"></select>
     </div>
-  </form>
-
-  <!-- Picker sheet: matches map container size -->
-  <div
-    id="pickerSheet"
-    class="picker-sheet"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="pickerTitle"
-    aria-hidden="true"
-    hidden
-  >
-    <div class="picker-sheet__backdrop" data-close="true"></div>
-    <div class="picker-sheet__panel">
-      <div class="picker-sheet__scroll">
-        <div class="picker-sheet__header">
-          <h2 id="pickerTitle" class="picker-sheet__title">Choose location</h2>
-          <button id="pickerClose" class="picker-sheet__close" type="button" aria-label="Close">×</button>
-        </div>
-
-        <label class="sr-only" for="pickerSearch">Search</label>
-        <input
-          id="pickerSearch"
-          class="picker-sheet__search"
-          type="search"
-          placeholder="Search here"
-          autocomplete="off"
-          spellcheck="false"
-        />
-
-        <div id="pickerChips" class="picker-sheet__chips" role="group" aria-label="Quick categories"></div>
-
-        <div class="picker-sheet__filters">
-          <button id="filterToggle" type="button" class="filter-toggle" aria-expanded="false" aria-controls="filterContent">
-            <span id="filterSummary">Filters</span>
-            <span class="filter-toggle__icon" aria-hidden="true">▼</span>
-          </button>
-          <div id="filterContent" class="filter-content" hidden>
-            <div class="filter-row">
-              <label for="filterBuilding">Building</label>
-              <select id="filterBuilding" class="filter-select">
-                <option value="">All</option>
-              </select>
-            </div>
-            <div class="filter-row">
-              <label for="filterFloor">Floor</label>
-              <select id="filterFloor" class="filter-select">
-                <option value="">All</option>
-              </select>
-            </div>
-            <div class="filter-row">
-              <label for="filterCategory">Category</label>
-              <select id="filterCategory" class="filter-select">
-                <option value="">All</option>
-              </select>
-            </div>
-            <div class="filter-row">
-              <label for="filterType">Type</label>
-              <select id="filterType" class="filter-select">
-                <option value="">All</option>
-              </select>
-            </div>
-            <div class="filter-row filter-row--full">
-              <label class="filter-toggle-label">
-                <input id="filterOpenNow" type="checkbox" />
-                <span>Open now</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div id="pickerStatus" class="picker-sheet__status" aria-live="polite"></div>
-        <ul id="pickerResults" class="picker-sheet__results" aria-label="Search results"></ul>
-      </div>
-    </div>
-  </div>
+    <button id="previewButton" class="button" type="button" disabled>
+      Preview route
+    </button>
+  </section>
 </section>

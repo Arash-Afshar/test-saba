@@ -1,4 +1,4 @@
-<section class="route-preview">
+<section class="route-preview" aria-label="Route preview">
   <div class="route-preview-header">
     <h2 class="route-title">Route Preview</h2>
   </div>
@@ -21,6 +21,11 @@
       <div class="point-details" id="endDetails">-</div>
     </div>
   </div>
+
+  <section class="route-steps-panel" aria-label="Route steps">
+    <h3 class="route-steps-title">Steps</h3>
+    <ol id="routeSteps" class="route-steps"></ol>
+  </section>
   
   <div class="map-container">
     <div id="poiTooltip" class="poi-tooltip"></div>
@@ -43,5 +48,22 @@
     </div>
   </div>
   
-  <div class="route-summary" id="routeSummary"></div>
+  <div class="route-summary" id="routeSummary" role="status" aria-live="polite"></div>
+
+  <div
+    id="routeErrorModal"
+    class="modal"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="routeErrorTitle"
+    aria-describedby="routeErrorMessage"
+    hidden
+  >
+    <div class="modal__backdrop" data-close="true"></div>
+    <div class="modal__dialog" role="document">
+      <h3 id="routeErrorTitle" class="modal__title">Route unavailable</h3>
+      <p id="routeErrorMessage" class="modal__message"></p>
+      <button id="routeErrorClose" class="button" type="button">Close</button>
+    </div>
+  </div>
 </section>

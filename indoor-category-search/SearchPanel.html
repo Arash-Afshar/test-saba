@@ -1,26 +1,60 @@
 
-<section class="search-panel">
-  <section class="route-controls">
-    <div class="field">
-      <select id="buildingSelect" class="select" aria-label="Building"></select>
+<section class="search-panel" aria-label="Route selection">
+  <form class="route-controls" action="javascript:void(0)">
+    <fieldset class="filters">
+      <legend class="filters__legend">Filters</legend>
+      <div class="filters__row">
+        <div id="domainTypeChips" class="chip-group" role="group" aria-label="Type"></div>
+
+        <label class="toggle">
+          <input id="openNowToggle" type="checkbox" />
+          <span>Open now</span>
+        </label>
+      </div>
+      <p id="scopingNote" class="scoping-note" aria-live="polite"></p>
+    </fieldset>
+
+    <section class="picker" aria-label="Start">
+      <label class="picker__label" for="startSearch">Start</label>
+      <input
+        id="startSearch"
+        class="search-input"
+        type="search"
+        inputmode="search"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Search for a start location"
+      />
+      <div id="startStatus" class="sr-only" aria-live="polite"></div>
+      <ul id="startResults" class="results" aria-label="Start results"></ul>
+      <div class="selection-row">
+        <div class="selection-row__value" id="startSelection">No start selected</div>
+        <button id="clearStartButton" class="link-button" type="button" disabled>Clear</button>
+      </div>
+    </section>
+
+    <section class="picker" aria-label="Destination">
+      <label class="picker__label" for="endSearch">Destination</label>
+      <input
+        id="endSearch"
+        class="search-input"
+        type="search"
+        inputmode="search"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Search for a destination"
+      />
+      <div id="endStatus" class="sr-only" aria-live="polite"></div>
+      <ul id="endResults" class="results" aria-label="Destination results"></ul>
+      <div class="selection-row">
+        <div class="selection-row__value" id="endSelection">No destination selected</div>
+        <button id="clearEndButton" class="link-button" type="button" disabled>Clear</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="swapButton" class="button button--secondary" type="button" disabled>Swap</button>
+      <button id="previewButton" class="button" type="button" disabled>Preview route</button>
     </div>
-    <div class="field">
-      <select id="floorSelect" class="select" aria-label="Floor" disabled></select>
-    </div>
-    <div class="field">
-      <select id="categorySelect" class="select" aria-label="Category" disabled></select>
-    </div>
-    <div class="field">
-      <select id="startSelect" class="select" aria-label="Start point" disabled></select>
-    </div>
-    <div class="field">
-      <select id="destinationCategorySelect" class="select" aria-label="Destination category"></select>
-    </div>
-    <div class="field">
-      <select id="endSelect" class="select" aria-label="Destination"></select>
-    </div>
-    <button id="previewButton" class="button" type="button" disabled>
-      Preview route
-    </button>
-  </section>
+  </form>
 </section>

@@ -1,292 +1,480 @@
-// Initializes the search panel: building, floor, category, start, destination dropdowns, and preview button.
+// Initializes the search panel: domain/type filters, searchable start/destination pickers, and preview button.
 export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelectionChange, onPreview }) {
+  // buildingOptions is currently unused (search-first UX), but kept for API compatibility.
+  void buildingOptions;
+
   const host = document.querySelector(hostId);
-  const buildingSelect = host.querySelector("#buildingSelect");
-  const floorSelect = host.querySelector("#floorSelect");
-  const categorySelect = host.querySelector("#categorySelect");
-  const startSelect = host.querySelector("#startSelect");
-  const destinationCategorySelect = host.querySelector("#destinationCategorySelect");
-  const endSelect = host.querySelector("#endSelect");
-  const previewButton = host.querySelector("#previewButton");
+  if (!host) return;
 
-  const populateSelect = (selectEl, options, placeholder) => {
-    selectEl.innerHTML = "";
-    const placeholderOption = document.createElement("option");
-    placeholderOption.value = placeholder.value;
-    placeholderOption.textContent = placeholder.label;
-    selectEl.appendChild(placeholderOption);
+  const domainTypeChipsEl = host.querySelector("#domainTypeChips");
+  const openNowToggleEl = host.querySelector("#openNowToggle");
+  const scopingNoteEl = host.querySelector("#scopingNote");
 
-    options.forEach((option) => {
-      const opt = document.createElement("option");
-      opt.value = option.value;
-      opt.textContent = option.label;
-      selectEl.appendChild(opt);
+  const startSearchEl = host.querySelector("#startSearch");
+  const startResultsEl = host.querySelector("#startResults");
+  const startStatusEl = host.querySelector("#startStatus");
+  const startSelectionEl = host.querySelector("#startSelection");
+  const clearStartButtonEl = host.querySelector("#clearStartButton");
+
+  const endSearchEl = host.querySelector("#endSearch");
+  const endResultsEl = host.querySelector("#endResults");
+  const endStatusEl = host.querySelector("#endStatus");
+  const endSelectionEl = host.querySelector("#endSelection");
+  const clearEndButtonEl = host.querySelector("#clearEndButton");
+
+  const swapButtonEl = host.querySelector("#swapButton");
+  const previewButtonEl = host.querySelector("#previewButton");
+
+  /** @type {string} "" means All */
+  let selectedDomainType = "";
+  let openNowOnly = false;
+
+  /** @type {string} */
+  let startId = "";
+  /** @type {string} */
+  let endId = "";
+
+  const compareByName = (a, b) =>
+    (a.displayName || a.label || "").localeCompare(b.displayName || b.label || "", undefined, {
+      sensitivity: "base"
     });
+
+  const getPoiById = (poiId) => poiOptions.find((p) => String(p.value) === String(poiId)) || null;
+
+  const formatPoiSummary = (poi) => {
+    if (!poi) return "";
+    const name = poi.displayName || poi.label || "Unknown location";
+    const building = poi.buildingId ? `Building ${poi.buildingId}` : "Building ?";
+    const floor = poi.floorId ? `Floor ${poi.floorId}` : "Floor ?";
+    const category = poi.categoryName ? poi.categoryName : "Location";
+    return `${name} — ${building}, ${floor} • ${category}`;
   };
 
-  // Shared compare for name sorting (used for start and destination).
-  const compareByName = (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+  // Builds a building adjacency graph from cross-building connector POIs.
+  // A connector is considered cross-building when a CONNECTOR with the same displayName exists in 2+ buildings.
+  const buildBuildingConnectorGraph = () => {
+    /** @type {Map<string, Set<string>>} */
+    const adjacency = new Map();
 
-  // Building order: by id ascending.
-  const getBuildingOptions = () =>
-    buildingOptions.slice().sort((a, b) => Number(a.value) - Number(b.value));
-
-  // Unique categories for the given building (for destination filter), sorted by name.
-  const getDestinationCategoryOptions = (buildingId) => {
-    if (!buildingId) return [];
-    const inBuilding = poiOptions.filter((poi) => String(poi.buildingId) === String(buildingId));
-    const byId = new Map();
-    inBuilding.forEach((poi) => {
-      if (poi.categoryId && poi.categoryName && !byId.has(poi.categoryId))
-        byId.set(poi.categoryId, { value: poi.categoryId, label: poi.categoryName });
-    });
-    const byLabel = new Map();
-    [...byId.values()].sort((a, b) => compareByName(a, b)).forEach((opt) => {
-      if (!byLabel.has(opt.label)) byLabel.set(opt.label, opt);
-    });
-    return [...byLabel.values()].sort((a, b) => compareByName(a, b));
-  };
-
-  // Destination order: filter by buildingId, optional categoryId, then floor ascending, then name ascending. Dedupe by value (id).
-  const getDestinationOptions = (buildingId, categoryId) => {
-    let list = poiOptions.slice();
-    if (buildingId) list = list.filter((poi) => String(poi.buildingId) === String(buildingId));
-    if (categoryId) list = list.filter((poi) => String(poi.categoryId) === String(categoryId));
-    const byValue = new Map();
-    list.forEach((opt) => { if (!byValue.has(opt.value)) byValue.set(opt.value, opt); });
-    return [...byValue.values()].sort((a, b) => {
-      const byFloor = Number(a.floorId) - Number(b.floorId);
-      return byFloor !== 0 ? byFloor : compareByName(a, b);
-    });
-  };
-
-  // Returns unique floor options for the given building (from POIs).
-  const getFloorOptionsForBuilding = (buildingId) => {
-    if (!buildingId) return [];
-    const floors = [...new Set(poiOptions.filter((poi) => String(poi.buildingId) === String(buildingId)).map((poi) => poi.floorId))];
-    return floors.sort((a, b) => Number(a) - Number(b)).map((id) => ({ value: String(id), label: `Floor ${id}` }));
-  };
-
-  // Returns unique category options (poi_type) for the given building and floor, by id then by label to avoid duplicates, sorted by name.
-  const getCategoryOptionsForBuildingAndFloor = (buildingId, floorId) => {
-    if (!buildingId || !floorId) return [];
-    const poisOnFloor = poiOptions.filter(
-      (poi) => String(poi.buildingId) === String(buildingId) && String(poi.floorId) === String(floorId)
+    const connectors = poiOptions.filter(
+      (p) => String(p.categoryName || "").toUpperCase() === "CONNECTOR" && String(p.displayName || "").trim() !== ""
     );
-    const byId = new Map();
-    poisOnFloor.forEach((poi) => {
-      if (poi.categoryId && poi.categoryName && !byId.has(poi.categoryId))
-        byId.set(poi.categoryId, { value: poi.categoryId, label: poi.categoryName });
+
+    /** @type {Map<string, Set<string>>} */
+    const byName = new Map();
+    connectors.forEach((p) => {
+      const name = String(p.displayName).trim();
+      if (!byName.has(name)) byName.set(name, new Set());
+      byName.get(name).add(String(p.buildingId));
     });
-    const byLabel = new Map();
-    [...byId.values()].sort((a, b) => compareByName(a, b)).forEach((opt) => {
-      if (!byLabel.has(opt.label)) byLabel.set(opt.label, opt);
+
+    const addEdge = (a, b) => {
+      if (!adjacency.has(a)) adjacency.set(a, new Set());
+      if (!adjacency.has(b)) adjacency.set(b, new Set());
+      adjacency.get(a).add(b);
+      adjacency.get(b).add(a);
+    };
+
+    byName.forEach((buildingIds) => {
+      const ids = [...buildingIds];
+      if (ids.length < 2) return;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) addEdge(ids[i], ids[j]);
+      }
     });
-    return [...byLabel.values()].sort((a, b) => compareByName(a, b));
+
+    return adjacency;
   };
 
-  // Returns POI options for the given building, floor, and category, sorted by name ascending. Dedupe by value (id).
-  const getStartOptionsForBuildingFloorAndCategory = (buildingId, floorId, categoryId) => {
-    if (!buildingId || !floorId || !categoryId) return [];
-    const list = poiOptions.filter(
-      (poi) =>
-        String(poi.buildingId) === String(buildingId) &&
-        String(poi.floorId) === String(floorId) &&
-        String(poi.categoryId) === String(categoryId)
-    );
-    const byValue = new Map();
-    list.forEach((opt) => { if (!byValue.has(opt.value)) byValue.set(opt.value, opt); });
-    return [...byValue.values()].sort(compareByName);
-  };
+  const connectorGraph = buildBuildingConnectorGraph();
 
-  // Repopulates floor dropdown from selected building; floor, category, start; also destination category and destination by building.
-  const updateFloorOptions = () => {
-    const buildingId = buildingSelect.value;
-    floorSelect.value = "";
-    categorySelect.value = "";
-    startSelect.value = "";
-    destinationCategorySelect.value = "";
-    endSelect.value = "";
-    if (!buildingId) {
-      floorSelect.disabled = true;
-      categorySelect.disabled = true;
-      startSelect.disabled = true;
-      destinationCategorySelect.disabled = true;
-      endSelect.disabled = true;
-      populateSelect(floorSelect, [], { value: "", label: "Select floor" });
-      populateSelect(categorySelect, [], { value: "", label: "Select start point category" });
-      populateSelect(startSelect, [], { value: "", label: "Select start point" });
-      populateSelect(destinationCategorySelect, [], destinationCategoryPlaceholder);
-      populateSelect(endSelect, [], { value: "", label: "Select destination" });
-    } else {
-      floorSelect.disabled = false;
-      const floorOptions = getFloorOptionsForBuilding(buildingId);
-      populateSelect(floorSelect, floorOptions, { value: "", label: "Select floor" });
-      categorySelect.disabled = true;
-      populateSelect(categorySelect, [], { value: "", label: "Select start point category" });
-      startSelect.disabled = true;
-      populateSelect(startSelect, [], { value: "", label: "Select start point" });
-      destinationCategorySelect.disabled = false;
-      endSelect.disabled = false;
-      populateSelect(destinationCategorySelect, getDestinationCategoryOptions(buildingId), destinationCategoryPlaceholder);
-      populateSelect(endSelect, getDestinationOptions(buildingId, ""), { value: "", label: "Select destination" });
+  const getReachableBuildings = (startBuildingId) => {
+    const start = String(startBuildingId || "");
+    if (!start) return null;
+
+    /** @type {Set<string>} */
+    const visited = new Set([start]);
+    /** @type {string[]} */
+    const queue = [start];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const neighbors = connectorGraph.get(current);
+      if (!neighbors) continue;
+      neighbors.forEach((n) => {
+        if (!visited.has(n)) {
+          visited.add(n);
+          queue.push(n);
+        }
+      });
     }
-    notifySelectionChange();
-    updatePreviewState();
+
+    return visited;
   };
 
-  // Repopulates category dropdown from selected building and floor; clears category and start.
-  const updateCategoryOptions = () => {
-    const buildingId = buildingSelect.value;
-    const floorId = floorSelect.value;
-    categorySelect.value = "";
-    startSelect.value = "";
-    if (!buildingId || !floorId) {
-      categorySelect.disabled = true;
-      startSelect.disabled = true;
-      populateSelect(categorySelect, [], { value: "", label: "Select start point category" });
-      populateSelect(startSelect, [], { value: "", label: "Select start point" });
-    } else {
-      categorySelect.disabled = false;
-      const categoryOptions = getCategoryOptionsForBuildingAndFloor(buildingId, floorId);
-      populateSelect(categorySelect, categoryOptions, { value: "", label: "Select start point category" });
-      startSelect.disabled = true;
-      populateSelect(startSelect, [], { value: "", label: "Select start point" });
+  const getAllowedBuildingsForEndpoint = (endpoint) => {
+    // endpoint is "start" or "end"
+    if (endpoint === "end") {
+      const startPoi = getPoiById(startId);
+      return startPoi ? getReachableBuildings(startPoi.buildingId) : null;
     }
-    notifySelectionChange();
-    updatePreviewState();
+    const endPoi = getPoiById(endId);
+    return endPoi ? getReachableBuildings(endPoi.buildingId) : null;
   };
 
-  // Repopulates start dropdown from selected building, floor, and category.
-  const updateStartOptions = () => {
-    const buildingId = buildingSelect.value;
-    const floorId = floorSelect.value;
-    const categoryId = categorySelect.value;
-    startSelect.value = "";
-    if (!buildingId || !floorId || !categoryId) {
-      startSelect.disabled = true;
-      populateSelect(startSelect, [], { value: "", label: "Select start point" });
-    } else {
-      startSelect.disabled = false;
-      const startOptions = getStartOptionsForBuildingFloorAndCategory(buildingId, floorId, categoryId);
-      populateSelect(startSelect, startOptions, { value: "", label: "Select start point" });
+  const doesPoiMatchFilters = (poi, endpoint, query) => {
+    if (!poi) return false;
+
+    const q = String(query || "").trim().toLowerCase();
+    if (q) {
+      // Include building/floor so users can type numbers like "101" (Building 101) or "floor 2".
+      const hay = `${poi.displayName || ""} ${poi.categoryName || ""} ${poi.domainType || ""} building ${
+        poi.buildingId || ""
+      } floor ${poi.floorId || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
     }
-    notifySelectionChange();
-    updatePreviewState();
+
+    if (selectedDomainType && String(poi.domainType) !== String(selectedDomainType)) return false;
+
+    if (openNowOnly && poi.isOpen !== true) return false;
+
+    const allowedBuildings = getAllowedBuildingsForEndpoint(endpoint);
+    if (allowedBuildings && !allowedBuildings.has(String(poi.buildingId))) return false;
+
+    return true;
+  };
+
+  const updateScopingNote = () => {
+    if (!scopingNoteEl) return;
+
+    if (startId) {
+      const startPoi = getPoiById(startId);
+      const allowed = getAllowedBuildingsForEndpoint("end");
+      if (startPoi && allowed) {
+        const buildings = [...allowed].sort((a, b) => Number(a) - Number(b));
+        if (buildings.length === 1) {
+          scopingNoteEl.textContent = `Destination is limited to Building ${buildings[0]} (no indoor connector to other buildings).`;
+        } else {
+          scopingNoteEl.textContent = `Destination is available in Buildings ${buildings.join(", ")}.`;
+        }
+        return;
+      }
+    }
+
+    if (endId) {
+      const endPoi = getPoiById(endId);
+      const allowed = getAllowedBuildingsForEndpoint("start");
+      if (endPoi && allowed) {
+        const buildings = [...allowed].sort((a, b) => Number(a) - Number(b));
+        if (buildings.length === 1) {
+          scopingNoteEl.textContent = `Start is limited to Building ${buildings[0]} (no indoor connector to other buildings).`;
+        } else {
+          scopingNoteEl.textContent = `Start is available in Buildings ${buildings.join(", ")}.`;
+        }
+        return;
+      }
+    }
+
+    scopingNoteEl.textContent = "";
+  };
+
+  const clearResults = (resultsEl, statusEl) => {
+    if (resultsEl) resultsEl.innerHTML = "";
+    if (statusEl) statusEl.textContent = "";
+  };
+
+  const renderResults = (endpoint) => {
+    const isStart = endpoint === "start";
+    const query = isStart ? startSearchEl.value : endSearchEl.value;
+    const resultsEl = isStart ? startResultsEl : endResultsEl;
+    const statusEl = isStart ? startStatusEl : endStatusEl;
+
+    const matches = poiOptions
+      .filter((p) => doesPoiMatchFilters(p, endpoint, query))
+      .sort(compareByName)
+      .slice(0, 12);
+
+    if (!resultsEl) return;
+    resultsEl.innerHTML = "";
+
+    if (statusEl) {
+      const count = matches.length;
+      statusEl.textContent = count === 0 ? "No matches." : `${count} match${count === 1 ? "" : "es"}.`;
+    }
+
+    if (matches.length === 0) {
+      const li = document.createElement("li");
+      li.className = "results__empty";
+      li.textContent = "No matches";
+      resultsEl.appendChild(li);
+      return;
+    }
+
+    matches.forEach((poi) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "result-item";
+      btn.dataset.poiId = String(poi.value);
+      btn.textContent = formatPoiSummary(poi);
+
+      const openLabel = poi.isOpen ? "Open" : "Closed";
+      btn.setAttribute(
+        "aria-label",
+        `${poi.displayName || "Location"}, Building ${poi.buildingId}, Floor ${poi.floorId}, ${poi.categoryName || "category"}, ${openLabel}`
+      );
+
+      btn.addEventListener("click", () => {
+        if (isStart) {
+          setStart(poi.value);
+          // After selecting a start, the next common action is choosing a destination.
+          endSearchEl?.focus?.();
+        } else {
+          setDestination(poi.value);
+          // If a start is already selected, move to Preview; otherwise, prompt for start.
+          (startId ? previewButtonEl : startSearchEl)?.focus?.();
+        }
+      });
+
+      li.appendChild(btn);
+      resultsEl.appendChild(li);
+    });
+  };
+
+  const updateButtons = () => {
+    const hasStart = Boolean(startId);
+    const hasEnd = Boolean(endId);
+
+    clearStartButtonEl.disabled = !hasStart;
+    clearEndButtonEl.disabled = !hasEnd;
+    swapButtonEl.disabled = !(hasStart && hasEnd);
+
+    // Enable preview only when both points are selected.
+    previewButtonEl.disabled = !(hasStart && hasEnd);
   };
 
   const notifySelectionChange = () => {
     onSelectionChange?.({
-      buildingId: buildingSelect.value,
-      floorId: floorSelect.value,
-      categoryId: categorySelect.value,
-      startId: startSelect.value,
-      endId: endSelect.value
+      startId,
+      endId,
+      domainType: selectedDomainType,
+      openNowOnly
     });
   };
 
-  // Enables preview button only when destination (endId) is selected.
-  const updatePreviewState = () => {
-    const endId = endSelect.value;
-    previewButton.disabled = !endId;
+  const enforceIndoorScoping = () => {
+    // If one endpoint is selected, the opposite endpoint must be in an allowed building.
+    if (startId && endId) {
+      const endPoi = getPoiById(endId);
+      const allowedForEnd = getAllowedBuildingsForEndpoint("end");
+      if (endPoi && allowedForEnd && !allowedForEnd.has(String(endPoi.buildingId))) {
+        // Clear destination if it no longer matches indoor scoping.
+        endId = "";
+        endSelectionEl.textContent = "No destination selected";
+        endSearchEl.value = "";
+        clearResults(endResultsEl, endStatusEl);
+      }
+
+      const startPoi = getPoiById(startId);
+      const allowedForStart = getAllowedBuildingsForEndpoint("start");
+      if (startPoi && allowedForStart && !allowedForStart.has(String(startPoi.buildingId))) {
+        startId = "";
+        startSelectionEl.textContent = "No start selected";
+        startSearchEl.value = "";
+        clearResults(startResultsEl, startStatusEl);
+      }
+    }
   };
 
-  buildingSelect.addEventListener("change", () => updateFloorOptions());
-  floorSelect.addEventListener("change", () => updateCategoryOptions());
-  categorySelect.addEventListener("change", () => updateStartOptions());
+  const setStart = (poiId) => {
+    const poi = getPoiById(poiId);
+    if (!poi) return;
+    startId = String(poi.value);
+    startSelectionEl.textContent = formatPoiSummary(poi);
+    startSearchEl.value = poi.displayName || "";
+    clearResults(startResultsEl, startStatusEl);
 
-  startSelect.addEventListener("change", () => {
+    enforceIndoorScoping();
+    updateScopingNote();
+    updateButtons();
     notifySelectionChange();
-    updatePreviewState();
+  };
+
+  const setDestination = (poiId) => {
+    const poi = getPoiById(poiId);
+    if (!poi) return;
+    endId = String(poi.value);
+    endSelectionEl.textContent = formatPoiSummary(poi);
+    endSearchEl.value = poi.displayName || "";
+    clearResults(endResultsEl, endStatusEl);
+
+    enforceIndoorScoping();
+    updateScopingNote();
+    updateButtons();
+    notifySelectionChange();
+  };
+
+  // Render domain/type chips.
+  const domainTypes = [
+    ...new Set(poiOptions.map((p) => String(p.domainType || "").trim()).filter((t) => t !== ""))
+  ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  const renderDomainChips = () => {
+    if (!domainTypeChipsEl) return;
+    domainTypeChipsEl.innerHTML = "";
+
+    const createChip = (value, label) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.dataset.value = String(value);
+      btn.setAttribute("aria-pressed", String(value) === String(selectedDomainType) ? "true" : "false");
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        selectedDomainType = String(value);
+        // Update all pressed states.
+        domainTypeChipsEl.querySelectorAll(".chip").forEach((chip) => {
+          chip.setAttribute(
+            "aria-pressed",
+            String(chip.dataset.value) === String(selectedDomainType) ? "true" : "false"
+          );
+        });
+        // Re-render results for the currently focused input.
+        renderResults(document.activeElement === endSearchEl ? "end" : "start");
+        // If current selections no longer match filters, keep them (filters affect lists only).
+      });
+      return btn;
+    };
+
+    domainTypeChipsEl.appendChild(createChip("", "All"));
+    domainTypes.forEach((t) => domainTypeChipsEl.appendChild(createChip(t, t)));
+  };
+
+  renderDomainChips();
+
+  // Wire up filters.
+  openNowToggleEl?.addEventListener("change", () => {
+    openNowOnly = Boolean(openNowToggleEl.checked);
+    renderResults(document.activeElement === endSearchEl ? "end" : "start");
   });
 
-  const destinationCategoryPlaceholder = { value: "", label: "Select destination category" };
+  // Wire up search inputs.
+  const attachSearchHandlers = (endpoint) => {
+    const isStart = endpoint === "start";
+    const inputEl = isStart ? startSearchEl : endSearchEl;
+    const resultsEl = isStart ? startResultsEl : endResultsEl;
+    const statusEl = isStart ? startStatusEl : endStatusEl;
+    const pickerEl = inputEl?.closest?.(".picker") || null;
 
-  destinationCategorySelect.addEventListener("change", () => {
-    const buildingId = buildingSelect.value;
-    const categoryId = destinationCategorySelect.value;
-    populateSelect(endSelect, getDestinationOptions(buildingId, categoryId), { value: "", label: "Select destination" });
-    endSelect.value = "";
+    if (!inputEl || !resultsEl) return;
+
+    let hideTimer = null;
+
+    const scheduleHide = () => {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        // Only hide if focus has fully left the picker (supports keyboard access to the results).
+        if (pickerEl && pickerEl.contains(document.activeElement)) return;
+        clearResults(resultsEl, statusEl);
+      }, 150);
+    };
+
+    const cancelHide = () => {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = null;
+    };
+
+    inputEl.addEventListener("input", () => renderResults(endpoint));
+    inputEl.addEventListener("focus", () => {
+      cancelHide();
+      renderResults(endpoint);
+    });
+
+    // Keep results visible while interacting (pointer + keyboard).
+    if (pickerEl) {
+      pickerEl.addEventListener("pointerdown", () => cancelHide());
+      pickerEl.addEventListener("pointerup", () => scheduleHide());
+      pickerEl.addEventListener("focusin", () => cancelHide());
+      pickerEl.addEventListener("focusout", () => scheduleHide());
+    }
+
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const first = resultsEl.querySelector(".result-item");
+        if (first) {
+          e.preventDefault();
+          first.click();
+        }
+      }
+      if (e.key === "Escape") {
+        clearResults(resultsEl, statusEl);
+        inputEl.blur();
+      }
+    });
+  };
+
+  attachSearchHandlers("start");
+  attachSearchHandlers("end");
+
+  // Clear buttons.
+  clearStartButtonEl?.addEventListener("click", () => {
+    startId = "";
+    startSelectionEl.textContent = "No start selected";
+    startSearchEl.value = "";
+    clearResults(startResultsEl, startStatusEl);
+    updateScopingNote();
+    updateButtons();
     notifySelectionChange();
-    updatePreviewState();
   });
 
-  endSelect.addEventListener("change", () => {
+  clearEndButtonEl?.addEventListener("click", () => {
+    endId = "";
+    endSelectionEl.textContent = "No destination selected";
+    endSearchEl.value = "";
+    clearResults(endResultsEl, endStatusEl);
+    updateScopingNote();
+    updateButtons();
     notifySelectionChange();
-    updatePreviewState();
   });
 
-  previewButton.addEventListener("click", () => onPreview?.());
+  // Swap button.
+  swapButtonEl?.addEventListener("click", () => {
+    if (!startId || !endId) return;
+    const prevStart = startId;
+    startId = endId;
+    endId = prevStart;
 
-  // Initial population: building only; floor, category, start empty until building/floor/category chosen; destination category and destination empty until building chosen
-  populateSelect(buildingSelect, getBuildingOptions(), { value: "", label: "Select building" });
-  populateSelect(floorSelect, [], { value: "", label: "Select floor" });
-  populateSelect(categorySelect, [], { value: "", label: "Select start point category" });
-  populateSelect(startSelect, [], { value: "", label: "Select start point" });
-  populateSelect(destinationCategorySelect, [], destinationCategoryPlaceholder);
-  populateSelect(endSelect, [], { value: "", label: "Select destination" });
-  floorSelect.disabled = true;
-  categorySelect.disabled = true;
-  startSelect.disabled = true;
-  destinationCategorySelect.disabled = true;
-  endSelect.disabled = true;
+    const startPoi = getPoiById(startId);
+    const endPoi = getPoiById(endId);
+    startSelectionEl.textContent = startPoi ? formatPoiSummary(startPoi) : "No start selected";
+    endSelectionEl.textContent = endPoi ? formatPoiSummary(endPoi) : "No destination selected";
+    startSearchEl.value = startPoi?.displayName || "";
+    endSearchEl.value = endPoi?.displayName || "";
 
-  updatePreviewState();
+    updateScopingNote();
+    updateButtons();
+    notifySelectionChange();
+  });
 
-  // Returns methods to programmatically set start/destination -map click handlers.
+  // Preview button.
+  previewButtonEl?.addEventListener("click", () => onPreview?.());
+
+  // Initial state.
+  startSelectionEl.textContent = "No start selected";
+  endSelectionEl.textContent = "No destination selected";
+  updateScopingNote();
+  updateButtons();
+  notifySelectionChange();
+
+  // Returns methods to programmatically set start/destination from map clicks.
   return {
-    setStart: (poiId) => {
-      const poi = poiOptions.find((p) => String(p.value) === String(poiId));
-      if (!poi) return;
-      // Set building, floor, category first, then start
-      if (buildingSelect.value !== poi.buildingId) {
-        buildingSelect.value = poi.buildingId;
-        buildingSelect.dispatchEvent(new Event("change"));
-      }
-      // Wait for floor options to populate, then set floor
-      setTimeout(() => {
-        if (floorSelect.value !== poi.floorId) {
-          floorSelect.value = poi.floorId;
-          floorSelect.dispatchEvent(new Event("change"));
-        }
-        // Wait for category options to populate, then set category
-        setTimeout(() => {
-          if (categorySelect.value !== poi.categoryId) {
-            categorySelect.value = poi.categoryId;
-            categorySelect.dispatchEvent(new Event("change"));
-          }
-          // Finally set start
-          setTimeout(() => {
-            if (startSelect.options.length > 0) {
-              startSelect.value = String(poiId);
-              startSelect.dispatchEvent(new Event("change"));
-            }
-          }, 50);
-        }, 50);
-      }, 50);
-    },
-    setDestination: (poiId) => {
-      const poi = poiOptions.find((p) => String(p.value) === String(poiId));
-      if (!poi) return;
-      // Set building first if needed, then destination
-      if (buildingSelect.value !== poi.buildingId) {
-        buildingSelect.value = poi.buildingId;
-        buildingSelect.dispatchEvent(new Event("change"));
-      }
-      // Wait for destination options to populate, then set destination
-      setTimeout(() => {
-        if (endSelect.options.length > 0) {
-          endSelect.value = String(poiId);
-          endSelect.dispatchEvent(new Event("change"));
-        }
-      }, 50);
-    },
+    setStart: (poiId) => setStart(poiId),
+    setDestination: (poiId) => setDestination(poiId),
     getCurrentSelection: () => ({
-      buildingId: buildingSelect.value,
-      floorId: floorSelect.value,
-      categoryId: categorySelect.value,
-      startId: startSelect.value,
-      endId: endSelect.value
+      startId,
+      endId,
+      domainType: selectedDomainType,
+      openNowOnly
     })
   };
 }

@@ -4,15 +4,27 @@ async function bootstrap() {
   const routePreviewHost = document.querySelector("#routePreview");
 
   // Load search panel HTML
-  const panelResponse = await fetch("./SearchPanel.html");
+  // Avoid stale UI/data during local development (browser cache).
+  const panelResponse = await fetch("./SearchPanel.html", { cache: "no-store" });
   searchPanelHost.innerHTML = await panelResponse.text();
 
   // Load route preview HTML
-  const routePreviewResponse = await fetch("./RoutePreview.html");
+  const routePreviewResponse = await fetch("./RoutePreview.html", { cache: "no-store" });
   routePreviewHost.innerHTML = await routePreviewResponse.text();
 
-  const response = await fetch("./data.json");
+  const response = await fetch("./data.json", { cache: "no-store" });
   const INDOOR_POIS = await response.json();
+
+  // Extracts indoor domain/type from POI.data JSON string.
+  const getDomainType = (poi) => {
+    if (!poi?.data) return "";
+    try {
+      return String(JSON.parse(poi.data)?.TYPE ?? "");
+    } catch {
+      return "";
+    }
+  };
+
   // Unique building IDs for the building dropdown - panel sorts for display
   const buildingOptions = [...new Set(INDOOR_POIS.map((poi) => poi.building_id))].map((id) => ({
     value: String(id),
@@ -22,13 +34,18 @@ async function bootstrap() {
   const poiOptions = INDOOR_POIS.map((poi) => ({
     value: String(poi.id),
     label: `${poi.display_name} (Floor ${poi.floor_id})`,
+    displayName: poi.display_name ?? "",
     buildingId: String(poi.building_id),
     floorId: String(poi.floor_id),
     categoryId: String(poi.poi_type?.id ?? ""),
-    categoryName: poi.poi_type?.name ?? ""
+    categoryName: poi.poi_type?.name ?? "",
+    domainType: getDomainType(poi),
+    isOpen: Boolean(poi.is_open)
   }));
 
   let currentSelection = {};
+  // Must be declared before initSearchPanel runs because the panel will emit an initial selection change.
+  let routePreview = null;
 
   // Initialize search panel
   const { initSearchPanel } = await import("./search-panel.js");
@@ -61,7 +78,7 @@ async function bootstrap() {
 
   // Initialize route preview with POI click handler
   const { initRoutePreview } = await import("./route-preview.js");
-  const routePreview = initRoutePreview({
+  routePreview = initRoutePreview({
     hostId: "#routePreview",
     onPoiClick: handlePoiClick
   });

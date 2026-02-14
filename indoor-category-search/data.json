@@ -358,5 +358,35 @@
     "images": [{ "url": "https://picsum.photos/seed/poi24/160/120" }],
     "location": { "latitude": 53.5472, "longitude": -113.495 },
     "is_open": true
+  },
+  {
+    "id": 68150,
+    "display_name": "A-Block Elevator",
+    "building_id": 101,
+    "floor_id": 2,
+    "poi_type": { "id": 9, "name": "ELEVATOR" },
+    "address": "A-Block Core, Level 2",
+    "website": "",
+    "working_hours": "{\"working_hours\":[]}",
+    "data": "{\"TYPE\":\"ACCESS\"}",
+    "rating_data": { "ratings-average": "4.7", "reviews-count": "7" },
+    "images": [{ "url": "https://picsum.photos/seed/poi25/160/120" }],
+    "location": { "latitude": 53.54495, "longitude": -113.49135 },
+    "is_open": true
+  },
+  {
+    "id": 68158,
+    "display_name": "South Stairwell",
+    "building_id": 101,
+    "floor_id": 2,
+    "poi_type": { "id": 26, "name": "STAIRS" },
+    "address": "South Wing, Level 2",
+    "website": "",
+    "working_hours": "{\"working_hours\":[]}",
+    "data": "{\"TYPE\":\"ACCESS\"}",
+    "rating_data": { "ratings-average": "4.1", "reviews-count": "10" },
+    "images": [{ "url": "https://picsum.photos/seed/poi26/160/120" }],
+    "location": { "latitude": 53.5451, "longitude": -113.4926 },
+    "is_open": true
   }
 ]

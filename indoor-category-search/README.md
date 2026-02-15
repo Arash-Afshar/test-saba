@@ -38,7 +38,7 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 - When start/destinon are selected and route found, the distance of whole path is appears. 
 
-- Route information box shows the steps to take from start-destination with a short sentence with path length to the next step. To see the next step, user clicks the next button and it will show the next information sentense. There is also a previous button to see the previous step. A green circle is drawn around the current POI to provide an easier view of the current state. When user arrives to the destination a popup box appears and show the success travel done. If there is no route found, a popup box appears about no route found to inform the user.
+- Route information box shows the steps to take from start-destination with a short sentence with path length to the next step. To see the next step, user clicks the next button and it will show the next information sentense. There is also a previous button to see the previous step. When a route has multiple stapes, a green circle is drawn around the current POI to provide an easier view of the current state. When user arrives to the destination a popup box appears and show the success travel done. If there is no route found, a popup box appears about no route found to inform the user.
 
 ## Limitations
 
@@ -65,4 +65,4 @@ Build a usable indoor start/destination experience, including filtering and a ro
     To improve development speed and maintain design consistency, I would consider Bootstrap. This framework provides predefined utility classes and responsive design systems, which reduce repetitive CSS and improve maintainability.
 
 - React Router - Routing Library:
-    For navigation management in a single-page application, I would use a routing library such as React Router to enable structured, declarative routing instead of manually showing and hiding views.
+    Routing Library: For navigation management in a single-page application, I would use a routing library such as React Router to enable structured, declarative routing instead of manually showing and hiding views.

@@ -1,5 +1,5 @@
 // Initializes the search panel: From/To picker sheet, filters, and preview button.
-export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPreview }) {
+export function initSearchPanel({ hostId, buildingOptions, poiOptions, onSelectionChange, onPreview }) {
   const host = document.querySelector(hostId);
   if (!host) return;
 
@@ -63,7 +63,7 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
     return avg ? `★ ${avg}` : "";
   };
 
-  const doesPoiMatchFilters = (poi, query) => {
+  const doesPoiMatchFilters = (poi, endpoint, query) => {
     if (!poi) return false;
     const q = String(query || "").trim().toLowerCase();
     if (q) {

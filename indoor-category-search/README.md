@@ -46,6 +46,8 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 - There was limited data for access points between building floors and access to other buildings. (An access point must be common and exist for other floors to be connected). For testing the process I added some data to connect some floors like A-Block Elevator in floo1 and floor 2 in building 101. There was a skywalk connector in building 102 on floor 2. I added the same data to building 103 floor 2 to create an available route between building 101-103.
 
+- Euclidean distance is used for distance calculation.
+
 ## Future improvemnets
 
 - We can add tap option on the POIs. In this case user can selects the start/destination POIs without only typing.

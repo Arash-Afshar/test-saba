@@ -4,7 +4,6 @@ async function bootstrap() {
   const routePreviewHost = document.querySelector("#routePreview");
 
   // Load search panel HTML
-  // Avoid stale UI/data during local development (browser cache).
   const panelResponse = await fetch("./SearchPanel.html", { cache: "no-store" });
   searchPanelHost.innerHTML = await panelResponse.text();
 
@@ -15,7 +14,7 @@ async function bootstrap() {
   const response = await fetch("./data.json", { cache: "no-store" });
   const INDOOR_POIS = await response.json();
 
-  // Extracts indoor domain/type from POI.data JSON string.
+  // Extracts indoor type from POI.data JSON string.
   const getDomainType = (poi) => {
     if (!poi?.data) return "";
     try {
@@ -30,7 +29,7 @@ async function bootstrap() {
     value: String(id),
     label: `Building ${id}`
   }));
-  // POI options with buildingId, floorId, and category (poi_type) for filtering
+  // POI options with buildingId, floorId, and category for filtering
   const poiOptions = INDOOR_POIS.map((poi) => ({
     value: String(poi.id),
     label: `${poi.display_name} (Floor ${poi.floor_id})`,
@@ -45,7 +44,6 @@ async function bootstrap() {
   }));
 
   let currentSelection = {};
-  // Must be declared before initSearchPanel runs because the panel will emit an initial selection change.
   let routePreview = null;
 
   // Initialize search panel

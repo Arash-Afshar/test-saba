@@ -29,7 +29,7 @@ export function initRoutePreview({ hostId }) {
 
   const isConnector = (poi) => getPoiTypeName(poi).toUpperCase() === "CONNECTOR";
 
-  // ---------- Accessible error modal ----------
+  // Accessible error modal
   let lastActiveBeforeModal = null;
   const isModalOpen = () => Boolean(errorModalEl && !errorModalEl.hasAttribute("hidden"));
 
@@ -170,24 +170,22 @@ export function initRoutePreview({ hostId }) {
     const tooltipHeight = 100; // approximate height
     
     // Position tooltip to the right of the POI marker with offset
-    // POI marker radius is typically 5-8px, so offset by at least 20px to avoid overlap
+    // offset by at least 20px to avoid overlap
     const offsetX = 25; // Horizontal offset from POI center
     const offsetY = -tooltipHeight / 2; // Center vertically with POI
     
     let tooltipX = screenX - containerRect.left + offsetX;
     let tooltipY = screenY - containerRect.top + offsetY;
     
-    // If tooltip would go off the right edge, position it to the left instead
     if (tooltipX + tooltipWidth > containerRect.width - 10) {
       tooltipX = screenX - containerRect.left - tooltipWidth - offsetX;
     }
     
-    // If tooltip would go off the left edge, keep it on the right but adjust
     if (tooltipX < 10) {
       tooltipX = screenX - containerRect.left + offsetX;
     }
     
-    // Ensure tooltip stays within vertical bounds
+    // tooltip stays within vertical bounds
     if (tooltipY < 10) {
       tooltipY = 10;
     }
@@ -230,7 +228,7 @@ export function initRoutePreview({ hostId }) {
       cancelTooltipHide();
     });
     poiTooltipEl.addEventListener("mouseleave", () => {
-      hidePoiTooltip(100); // Small delay when leaving tooltip
+      hidePoiTooltip(100); // delay when leaving tooltip
     });
   }
 
@@ -308,7 +306,7 @@ export function initRoutePreview({ hostId }) {
       return;
     }
 
-    // Building boundary box - full map size (same as empty state)
+    // Building boundary box
     const boundaryRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     boundaryRect.setAttribute("x", "10");
     boundaryRect.setAttribute("y", "10");
@@ -444,7 +442,7 @@ export function initRoutePreview({ hostId }) {
     });
   };
 
-  // ---------- Route planning (elevator-first) ----------
+  // Route planning (elevator-first)
   const getPoisByBuildingFloor = (poiData, buildingId, floorId) =>
     poiData.filter(
       (p) => String(p.building_id) === String(buildingId) && String(p.floor_id) === String(floorId)
@@ -659,7 +657,7 @@ export function initRoutePreview({ hostId }) {
     prev.set(fromFloorId, null);
 
     while (unvisited.size > 0) {
-      // Pick the unvisited node with the smallest distance (graph is tiny).
+      // Pick the unvisited node with the smallest distance.
       let current = null;
       let bestDist = Number.POSITIVE_INFINITY;
       for (const f of unvisited) {
@@ -890,7 +888,7 @@ export function initRoutePreview({ hostId }) {
     return { ok: true, steps, distanceMeters, requiresStairs };
   };
 
-  // ---------- Step list + map-per-step state ----------
+  // Step list + map-per-step state
   let activeStepIndex = 0;
   let arrived = false;
   /** @type {any|null} */
@@ -1047,7 +1045,7 @@ export function initRoutePreview({ hostId }) {
       return;
     }
 
-    // Preview requested but missing selection.
+
     if (!startPoi || !endPoi) {
       distanceValueEl.textContent = "-";
       currentPlan = null;
@@ -1077,7 +1075,7 @@ export function initRoutePreview({ hostId }) {
       distanceValueEl.textContent = "-";
       openErrorModal(plan.reason);
 
-      // Still show a helpful map.
+
       mapBuildingId = String(startPoi.building_id);
       mapFloorId = String(startPoi.floor_id);
       drawFloorMap({

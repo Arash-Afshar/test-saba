@@ -284,6 +284,10 @@ body {
 .picker-sheet--landscape .picker-sheet__filters {
   grid-column: 1;
   grid-row: 4;
+  min-height: 0;
+  max-height: min(45vh, 220px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .picker-sheet--landscape .picker-sheet__status {

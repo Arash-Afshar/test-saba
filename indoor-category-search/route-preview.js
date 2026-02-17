@@ -378,10 +378,6 @@ export function initRoutePreview({ hostId }) {
 
       poiGroup.addEventListener("mouseenter", showTooltipForPoi);
       poiGroup.addEventListener("mouseleave", () => hidePoiTooltip(100));
-      poiGroup.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showTooltipForPoi();
-      });
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", poi.x);
@@ -440,6 +436,19 @@ export function initRoutePreview({ hostId }) {
 
   const distanceBetweenPois = (a, b) =>
     calculateDistance(a.location.latitude, a.location.longitude, b.location.latitude, b.location.longitude);
+
+  const pickNearest = (candidates, referencePoi) => {
+    let best = candidates[0];
+    let bestD = Number.POSITIVE_INFINITY;
+    for (const c of candidates) {
+      const d = distanceBetweenPois(referencePoi, c);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  };
 
   const buildBuildingGraph = (poiData) => {
     const adjacency = new Map();
@@ -632,19 +641,6 @@ export function initRoutePreview({ hostId }) {
     }
     floorPath.reverse();
 
-    const pickNearest = (candidates, referencePoi) => {
-      let best = candidates[0];
-      let bestD = Number.POSITIVE_INFINITY;
-      for (const c of candidates) {
-        const d = distanceBetweenPois(referencePoi, c);
-        if (d < bestD) {
-          bestD = d;
-          best = c;
-        }
-      }
-      return best;
-    };
-
     let currentPoi = fromPoi;
     for (const edge of floorPath) {
       const fromConnectors = getVerticalConnectors(poiData, buildingId, edge.fromFloorId, edge.kind);
@@ -755,15 +751,7 @@ export function initRoutePreview({ hostId }) {
         };
       }
 
-      let connectorFrom = fromCandidates[0];
-      let best = Number.POSITIVE_INFINITY;
-      for (const c of fromCandidates) {
-        const d = distanceBetweenPois(currentPoi, c);
-        if (d < best) {
-          best = d;
-          connectorFrom = c;
-        }
-      }
+      const connectorFrom = pickNearest(fromCandidates, currentPoi);
 
       const sameFloor = toCandidates.find((c) => String(c.floor_id) === String(connectorFrom.floor_id));
       const connectorTo = sameFloor || toCandidates[0];

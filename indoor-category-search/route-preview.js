@@ -1,8 +1,8 @@
-// Initializes the route preview panel - displays route info and floor map visualization.
 export function initRoutePreview({ hostId }) {
   const host = document.querySelector(hostId);
   if (!host) return;
 
+  // -------- Selector initializations --------
   const startNameEl = host.querySelector("#startName");
   const startDetailsEl = host.querySelector("#startDetails");
   const endNameEl = host.querySelector("#endName");
@@ -22,14 +22,12 @@ export function initRoutePreview({ hostId }) {
   const arrivedModalEl = host.querySelector("#arrivedModal");
   const arrivedCloseEl = host.querySelector("#arrivedClose");
 
-  // Timeout for hiding tooltip - allows smooth transition from POI to tooltip
+  // -------- Shared helpers + state --------
+  const getPoiTypeName = (poi) => String(poi?.poi_type?.name ?? "");
+  const isConnector = (poi) => getPoiTypeName(poi).toUpperCase() === "CONNECTOR";
   let tooltipHideTimeout = null;
 
-  const getPoiTypeName = (poi) => String(poi?.poi_type?.name ?? "");
-
-  const isConnector = (poi) => getPoiTypeName(poi).toUpperCase() === "CONNECTOR";
-
-  // Accessible error modal
+  // -------- Modal controls --------
   let lastActiveBeforeModal = null;
   const isModalOpen = () => Boolean(errorModalEl && !errorModalEl.hasAttribute("hidden"));
 
@@ -62,7 +60,6 @@ export function initRoutePreview({ hostId }) {
     if (e.key === "Escape") closeErrorModal();
   });
 
-  // Arrived modal
   let lastActiveBeforeArrived = null;
   const closeArrivedModal = () => {
     if (!arrivedModalEl) return;
@@ -88,7 +85,7 @@ export function initRoutePreview({ hostId }) {
     }
   });
 
-  // Formats working hours JSON string into readable text
+  // -------- Tooltip rendering --------
   const formatWorkingHours = (workingHoursStr) => {
     if (!workingHoursStr) return "";
     try {
@@ -101,7 +98,6 @@ export function initRoutePreview({ hostId }) {
     }
   };
 
-  // Formats rating data into readable text
   const formatRating = (ratingData) => {
     if (!ratingData) return "";
     const avg = ratingData["ratings-average"] || "";
@@ -112,46 +108,38 @@ export function initRoutePreview({ hostId }) {
     return `${avg} ⭐ (${count} reviews)`;
   };
 
-  // Shows tooltip with POI details at specified position - screen coordinates
   const showPoiTooltip = (poi, screenX, screenY) => {
     if (!poiTooltipEl || !floorMapEl) return;
-    
+
     const parts = [];
-    
-    // Add website if it exists and is not empty (priority 1)
+
     if (poi.website && poi.website.trim() !== "") {
       const websiteUrl = poi.website.trim();
-      // Ensure URL has protocol
-      const href = websiteUrl.startsWith("http://") || websiteUrl.startsWith("https://") 
-        ? websiteUrl 
+      const href = websiteUrl.startsWith("http://") || websiteUrl.startsWith("https://")
+        ? websiteUrl
         : `https://${websiteUrl}`;
       parts.push(`<div class="tooltip-row"><strong>Website:</strong> <a href="${href}" target="_blank" rel="noopener noreferrer" class="tooltip-link">${poi.website}</a></div>`);
     }
-    
-    // Add working hours if they exist (priority 2)
+
     const workingHours = formatWorkingHours(poi.working_hours);
     if (workingHours) {
       parts.push(`<div class="tooltip-row"><strong>Hours:</strong> ${workingHours}</div>`);
     }
-    
-    // Add rating if it exists (priority 3)
+
     const rating = formatRating(poi.rating_data);
     if (rating) {
       parts.push(`<div class="tooltip-row"><strong>Rating:</strong> ${rating}</div>`);
     }
-    
-    // Add is_open status if it exists (priority 4)
+
     if (poi.is_open !== undefined && poi.is_open !== null) {
       parts.push(`<div class="tooltip-row"><strong>Status:</strong> ${poi.is_open ? "Open" : "Closed"}</div>`);
     }
-    
-    // Only show tooltip if there's content to display
+
     if (parts.length === 0) return;
-    
-    // Get image URL if available
+
     const imageUrl = poi.images && poi.images.length > 0 && poi.images[0].url ? poi.images[0].url : null;
     const imageHtml = imageUrl ? `<img src="${imageUrl}" alt="${poi.display_name}" class="tooltip-image" />` : "";
-    
+
     poiTooltipEl.innerHTML = `
       ${imageHtml}
       <div class="tooltip-content">
@@ -159,46 +147,39 @@ export function initRoutePreview({ hostId }) {
         ${parts.join("")}
       </div>
     `;
-    
-    // Position tooltip relative to map container - which has position: relative
+
     const container = floorMapEl.parentElement;
     if (!container) return;
     const containerRect = container.getBoundingClientRect();
-    
-    // Calculate tooltip dimensions (approximate)
-    const tooltipWidth = 280; // max-width from CSS
-    const tooltipHeight = 100; // approximate height
-    
-    // Position tooltip to the right of the POI marker with offset
-    // offset by at least 20px to avoid overlap
-    const offsetX = 25; // Horizontal offset from POI center
-    const offsetY = -tooltipHeight / 2; // Center vertically with POI
-    
+
+    const tooltipWidth = 280;
+    const tooltipHeight = 100;
+    const offsetX = 25;
+    const offsetY = -tooltipHeight / 2;
+
     let tooltipX = screenX - containerRect.left + offsetX;
     let tooltipY = screenY - containerRect.top + offsetY;
-    
+
     if (tooltipX + tooltipWidth > containerRect.width - 10) {
       tooltipX = screenX - containerRect.left - tooltipWidth - offsetX;
     }
-    
+
     if (tooltipX < 10) {
       tooltipX = screenX - containerRect.left + offsetX;
     }
-    
-    // tooltip stays within vertical bounds
+
     if (tooltipY < 10) {
       tooltipY = 10;
     }
     if (tooltipY + tooltipHeight > containerRect.height - 10) {
       tooltipY = containerRect.height - tooltipHeight - 10;
     }
-    
+
     poiTooltipEl.style.left = `${tooltipX}px`;
     poiTooltipEl.style.top = `${tooltipY}px`;
     poiTooltipEl.style.display = "flex";
   };
 
-  // Hides POI tooltip with optional delay
   const hidePoiTooltip = (delay = 0) => {
     if (tooltipHideTimeout) {
       clearTimeout(tooltipHideTimeout);
@@ -214,25 +195,22 @@ export function initRoutePreview({ hostId }) {
     }
   };
 
-  // Cancels any pending tooltip hide
   const cancelTooltipHide = () => {
     if (tooltipHideTimeout) {
       clearTimeout(tooltipHideTimeout);
       tooltipHideTimeout = null;
     }
   };
-  
-  // Add hover handlers to tooltip element to keep it visible when hovering over it
+
   if (poiTooltipEl) {
     poiTooltipEl.addEventListener("mouseenter", () => {
       cancelTooltipHide();
     });
     poiTooltipEl.addEventListener("mouseleave", () => {
-      hidePoiTooltip(100); // delay when leaving tooltip
+      hidePoiTooltip(100);
     });
   }
 
-  // Tap outside to hide tooltip (for touch devices - hover doesn't work)
   const mapContainer = host.querySelector(".map-container");
   if (mapContainer) {
     mapContainer.addEventListener("click", (e) => {
@@ -242,17 +220,14 @@ export function initRoutePreview({ hostId }) {
     });
   }
 
-  // Calculates distance between two lat/long points using Euclidean distance (meters).
+  // -------- Map geometry + drawing --------
+  // Uses an approximate local meter conversion for short indoor segments.
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    // Convert degrees to approximate meters (1 degree latitude ≈ 111,000m, longitude varies by latitude)
-    // For Edmonton area (~53°N), 1 degree longitude ≈ 66,000m
     const latMeters = (lat2 - lat1) * 111000;
     const lonMeters = (lon2 - lon1) * 66000;
-    // Euclidean distance: sqrt(dx² + dy²)
     return Math.sqrt(latMeters * latMeters + lonMeters * lonMeters);
   };
 
-  // Normalizes coordinates to fit inside SVG with inset margin (POIs stay inside boundary).
   const boundaryInset = 30;
   const poiAreaWidth = 380 - boundaryInset * 2;
   const poiAreaHeight = 280 - boundaryInset * 2;
@@ -286,7 +261,6 @@ export function initRoutePreview({ hostId }) {
     return { pois: normalized, minLat, maxLat, minLon, maxLon };
   };
 
-  // Draws floor map with POIs and an optional segment (map-per-step).
   const drawFloorMap = ({
     poiData,
     buildingId,
@@ -306,7 +280,6 @@ export function initRoutePreview({ hostId }) {
       return;
     }
 
-    // Building boundary box
     const boundaryRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     boundaryRect.setAttribute("x", "10");
     boundaryRect.setAttribute("y", "10");
@@ -318,7 +291,6 @@ export function initRoutePreview({ hostId }) {
     boundaryRect.setAttribute("stroke-dasharray", "4 2");
     floorMapEl.appendChild(boundaryRect);
 
-    // Floor label in a box
     const floorLabelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const labelText = `Building ${buildingId}, Floor ${floorId}`;
     const boxPadding = 6;
@@ -345,7 +317,6 @@ export function initRoutePreview({ hostId }) {
     floorLabelGroup.appendChild(floorLabel);
     floorMapEl.appendChild(floorLabelGroup);
 
-    // Step segment line (only if both endpoints are on this floor and different).
     if (segmentFromId && segmentToId && String(segmentFromId) !== String(segmentToId)) {
       const fromPoi = pois.find((p) => String(p.id) === String(segmentFromId));
       const toPoi = pois.find((p) => String(p.id) === String(segmentToId));
@@ -363,7 +334,6 @@ export function initRoutePreview({ hostId }) {
       }
     }
 
-    // Green circle around current step's POI (user's position)
     if (currentPositionPoiId) {
       const currentPoi = pois.find((p) => String(p.id) === String(currentPositionPoiId));
       if (currentPoi) {
@@ -378,14 +348,12 @@ export function initRoutePreview({ hostId }) {
       }
     }
 
-    // Draw POI markers
     pois.forEach((poi) => {
       const isStart = String(poi.id) === String(startId);
       const isEnd = String(poi.id) === String(endId);
       const isHighlighted = highlightIds.some((id) => String(id) === String(poi.id));
       const isRoute = isStart || isEnd || isHighlighted;
 
-      // Wrap POI in a group for tooltip display
       const poiGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
       poiGroup.setAttribute("class", "poi-marker-group");
       poiGroup.setAttribute("data-poi-id", poi.id);
@@ -394,25 +362,26 @@ export function initRoutePreview({ hostId }) {
         `${poi.display_name || "Location"}, Building ${poi.building_id}, Floor ${poi.floor_id}, ${getPoiTypeName(poi) || "category"}`
       );
 
-      // Hover + focus handlers for tooltip
       const showTooltipForPoi = () => {
         if (!poiTooltipEl || !floorMapEl) return;
-        
-        cancelTooltipHide(); // Cancel any pending hide
-        
-        // Convert SVG coordinates to screen coordinates
+
+        cancelTooltipHide();
         const svgPoint = floorMapEl.createSVGPoint();
         svgPoint.x = poi.x;
         svgPoint.y = poi.y;
         const ctm = floorMapEl.getScreenCTM();
         if (!ctm) return;
-        
+
         const screenPoint = svgPoint.matrixTransform(ctm);
         showPoiTooltip(poi, screenPoint.x, screenPoint.y);
       };
 
       poiGroup.addEventListener("mouseenter", showTooltipForPoi);
       poiGroup.addEventListener("mouseleave", () => hidePoiTooltip(100));
+      poiGroup.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showTooltipForPoi();
+      });
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", poi.x);
@@ -423,7 +392,6 @@ export function initRoutePreview({ hostId }) {
       circle.setAttribute("stroke-width", isHighlighted ? "3" : "2");
       poiGroup.appendChild(circle);
 
-      // display_name label below each point
       const nameLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
       nameLabel.setAttribute("x", poi.x);
       nameLabel.setAttribute("y", poi.y + (isRoute ? 22 : 18));
@@ -437,7 +405,7 @@ export function initRoutePreview({ hostId }) {
     });
   };
 
-  // Route planning (elevator-first)
+  // -------- Route planning --------
   const getPoisByBuildingFloor = (poiData, buildingId, floorId) =>
     poiData.filter(
       (p) => String(p.building_id) === String(buildingId) && String(p.floor_id) === String(floorId)
@@ -473,21 +441,7 @@ export function initRoutePreview({ hostId }) {
   const distanceBetweenPois = (a, b) =>
     calculateDistance(a.location.latitude, a.location.longitude, b.location.latitude, b.location.longitude);
 
-  const pickNearest = (candidates, referencePoi) => {
-    let best = candidates[0];
-    let bestD = Number.POSITIVE_INFINITY;
-    for (const c of candidates) {
-      const d = distanceBetweenPois(referencePoi, c);
-      if (d < bestD) {
-        bestD = d;
-        best = c;
-      }
-    }
-    return best;
-  };
-
   const buildBuildingGraph = (poiData) => {
-    // adjacency: buildingId -> Map(neighborBuildingId -> connectorName)
     const adjacency = new Map();
 
     const connectors = poiData.filter((p) => isConnector(p) && String(p.display_name || "").trim() !== "");
@@ -501,7 +455,7 @@ export function initRoutePreview({ hostId }) {
     const addEdge = (a, b, name) => {
       if (!adjacency.has(a)) adjacency.set(a, new Map());
       if (!adjacency.has(b)) adjacency.set(b, new Map());
-      // Keep first connector if multiple exist.
+      // Keep first connector if multiple exist, this is added as an assumption in the readme.
       if (!adjacency.get(a).has(b)) adjacency.get(a).set(b, name);
       if (!adjacency.get(b).has(a)) adjacency.get(b).set(a, name);
     };
@@ -604,7 +558,6 @@ export function initRoutePreview({ hostId }) {
       floorAdjacency.get(from).push({ toFloorId: String(to), kind });
     };
 
-    // Create vertical edges between floors that both have an elevator or both have stairs.
     for (let i = 0; i < allFloors.length; i++) {
       for (let j = i + 1; j < allFloors.length; j++) {
         const a = allFloors[i];
@@ -620,7 +573,8 @@ export function initRoutePreview({ hostId }) {
       }
     }
 
-    const edgeWeight = (kind) => (kind === "ELEVATOR" ? 1 : 100) + 0.1; // stairs are heavily penalized
+    // Stairs are penalized to strongly prefer elevator paths when both are available.
+    const edgeWeight = (kind) => (kind === "ELEVATOR" ? 1 : 100) + 0.1;
 
     const dist = new Map(allFloors.map((f) => [f, Number.POSITIVE_INFINITY]));
     const prev = new Map();
@@ -630,7 +584,6 @@ export function initRoutePreview({ hostId }) {
     prev.set(fromFloorId, null);
 
     while (unvisited.size > 0) {
-      // Pick the unvisited node with the smallest distance.
       let current = null;
       let bestDist = Number.POSITIVE_INFINITY;
       for (const f of unvisited) {
@@ -670,7 +623,6 @@ export function initRoutePreview({ hostId }) {
       return { ok: false, reason: parts.join(" ") };
     }
 
-    // Reconstruct the floor path.
     const floorPath = [];
     let curFloor = toFloorId;
     while (curFloor !== fromFloorId) {
@@ -680,6 +632,19 @@ export function initRoutePreview({ hostId }) {
     }
     floorPath.reverse();
 
+    const pickNearest = (candidates, referencePoi) => {
+      let best = candidates[0];
+      let bestD = Number.POSITIVE_INFINITY;
+      for (const c of candidates) {
+        const d = distanceBetweenPois(referencePoi, c);
+        if (d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      return best;
+    };
+
     let currentPoi = fromPoi;
     for (const edge of floorPath) {
       const fromConnectors = getVerticalConnectors(poiData, buildingId, edge.fromFloorId, edge.kind);
@@ -687,14 +652,13 @@ export function initRoutePreview({ hostId }) {
       if (fromConnectors.length === 0 || toConnectors.length === 0) {
         return {
           ok: false,
-          reason: `Can’t create an indoor route: missing ${edge.kind.toLowerCase()} on Floor ${edge.fromFloorId} or Floor ${edge.toFloorId} in Building ${buildingId}.`
+          reason: `Can't create an indoor route: missing ${edge.kind.toLowerCase()} on Floor ${edge.fromFloorId} or Floor ${edge.toFloorId} in Building ${buildingId}.`
         };
       }
 
       const fromConnector = pickNearest(fromConnectors, currentPoi);
       const toConnector = pickNearest(toConnectors, toPoi);
 
-      // Step: go to elevator/stairs on the current floor
       if (String(currentPoi.id) !== String(fromConnector.id)) {
         const segDist = distanceBetweenPois(currentPoi, fromConnector);
         steps.push({
@@ -712,7 +676,6 @@ export function initRoutePreview({ hostId }) {
         distanceMeters += segDist;
       }
 
-      // Step: take elevator/stairs to the next floor.
       const verb = edge.kind === "ELEVATOR" ? "Take the elevator" : "Use the stairs";
       const floorDist = floorDistanceMeters(edge.fromFloorId, edge.toFloorId);
       steps.push({
@@ -730,11 +693,9 @@ export function initRoutePreview({ hostId }) {
       distanceMeters += floorDist;
       if (edge.kind === "STAIRS") requiresStairs = true;
 
-      // Arrive on the next floor at a connector endpoint.
       currentPoi = toConnector;
     }
 
-    // Final step: go to destination on the destination floor.
     if (String(currentPoi.id) !== String(toPoi.id)) {
       const segDist = distanceBetweenPois(currentPoi, toPoi);
       steps.push({
@@ -766,13 +727,12 @@ export function initRoutePreview({ hostId }) {
         : { ok: false, reason: within.reason };
     }
 
-    // Cross-building: require connector path.
     const graph = buildBuildingGraph(poiData);
     const path = findBuildingPath(graph, startBuildingId, endBuildingId);
     if (!path) {
       return {
         ok: false,
-        reason: `Can’t create an indoor route between Building ${startBuildingId} and Building ${endBuildingId}: no connector links these buildings.`
+        reason: `Can't create an indoor route between Building ${startBuildingId} and Building ${endBuildingId}: no connector links these buildings.`
       };
     }
 
@@ -795,21 +755,25 @@ export function initRoutePreview({ hostId }) {
         };
       }
 
-      // Pick the connector endpoint in the current building closest to our current position.
-      const connectorFrom = pickNearest(fromCandidates, currentPoi);
+      let connectorFrom = fromCandidates[0];
+      let best = Number.POSITIVE_INFINITY;
+      for (const c of fromCandidates) {
+        const d = distanceBetweenPois(currentPoi, c);
+        if (d < best) {
+          best = d;
+          connectorFrom = c;
+        }
+      }
 
-      // Pick a connector endpoint in the next building
       const sameFloor = toCandidates.find((c) => String(c.floor_id) === String(connectorFrom.floor_id));
       const connectorTo = sameFloor || toCandidates[0];
 
-      // Route inside the current building to reach the connector endpoint.
       const within = routeWithinBuilding({ poiData, fromPoi: currentPoi, toPoi: connectorFrom });
       if (!within.ok) return { ok: false, reason: within.reason };
       steps.push(...within.steps);
       distanceMeters += within.distanceMeters;
       if (within.requiresStairs) requiresStairs = true;
 
-      // Connector step (building transition).
       const connectorDist = distanceBetweenPois(connectorFrom, connectorTo);
       steps.push({
         kind: "connector",
@@ -828,7 +792,6 @@ export function initRoutePreview({ hostId }) {
       currentPoi = connectorTo;
     }
 
-    // Route inside the final building from last connector endpoint to destination.
     const finalWithin = routeWithinBuilding({ poiData, fromPoi: currentPoi, toPoi: endPoi });
     if (!finalWithin.ok) return { ok: false, reason: finalWithin.reason };
     steps.push(...finalWithin.steps);
@@ -838,10 +801,78 @@ export function initRoutePreview({ hostId }) {
     return { ok: true, steps, distanceMeters, requiresStairs };
   };
 
-  // Step list + map-per-step state
+  // -------- Step navigation --------
   let activeStepIndex = 0;
   let arrived = false;
   let currentPlan = null;
+
+  const drawCurrentPlanMapView = (mapView, currentPositionPoiId) => {
+    if (!currentPlan || !mapView) return;
+    drawFloorMap({
+      poiData: currentPlan.poiData,
+      buildingId: mapView.buildingId,
+      floorId: mapView.floorId,
+      startId: currentPlan.startId,
+      endId: currentPlan.endId,
+      segmentFromId: mapView.fromPoiId,
+      segmentToId: mapView.toPoiId,
+      highlightIds: mapView.highlightIds || [],
+      currentPositionPoiId
+    });
+  };
+
+  const resetStepState = ({ clearDistance = true } = {}) => {
+    currentPlan = null;
+    activeStepIndex = 0;
+    arrived = false;
+    if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
+    if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
+    if (clearDistance && distanceValueEl) distanceValueEl.textContent = "-";
+  };
+
+  const syncRouteInfo = (startPoi, endPoi) => {
+    startNameEl.textContent = startPoi ? startPoi.display_name : "-";
+    startDetailsEl.textContent = startPoi
+      ? `Building ${startPoi.building_id}, Floor ${startPoi.floor_id}`
+      : "-";
+    endNameEl.textContent = endPoi ? endPoi.display_name : "-";
+    endDetailsEl.textContent = endPoi ? `Building ${endPoi.building_id}, Floor ${endPoi.floor_id}` : "-";
+  };
+
+  const getDefaultMapTarget = (startPoi, endPoi) => {
+    if (endPoi) {
+      return {
+        buildingId: String(endPoi.building_id),
+        floorId: String(endPoi.floor_id)
+      };
+    }
+
+    if (startPoi) {
+      return {
+        buildingId: String(startPoi.building_id),
+        floorId: String(startPoi.floor_id)
+      };
+    }
+
+    return { buildingId: "", floorId: "" };
+  };
+
+  const drawSelectionMap = ({ poiData, buildingId, floorId, startId, endId, emptyMessage = "" }) => {
+    if (buildingId && floorId) {
+      drawFloorMap({
+        poiData,
+        buildingId,
+        floorId,
+        startId: startId || null,
+        endId: endId || null
+      });
+      return;
+    }
+
+    if (emptyMessage) {
+      floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">${emptyMessage}</text>`;
+    }
+  };
 
   const handleStepPrev = () => {
     const steps = currentPlan?.steps || [];
@@ -852,19 +883,7 @@ export function initRoutePreview({ hostId }) {
     activeStepIndex--;
     renderSteps();
     const map = steps[activeStepIndex]?.mapView;
-    if (map) {
-      drawFloorMap({
-        poiData: currentPlan.poiData,
-        buildingId: map.buildingId,
-        floorId: map.floorId,
-        startId: currentPlan.startId,
-        endId: currentPlan.endId,
-        segmentFromId: map.fromPoiId,
-        segmentToId: map.toPoiId,
-        highlightIds: map.highlightIds || [],
-        currentPositionPoiId: map.fromPoiId
-      });
-    }
+    drawCurrentPlanMapView(map, map?.fromPoiId);
   };
 
   const handleStepNext = () => {
@@ -876,36 +895,12 @@ export function initRoutePreview({ hostId }) {
       openArrivedModal();
       renderSteps();
       const lastMap = steps[steps.length - 1]?.mapView;
-      if (lastMap) {
-        drawFloorMap({
-          poiData: currentPlan.poiData,
-          buildingId: lastMap.buildingId,
-          floorId: lastMap.floorId,
-          startId: currentPlan.startId,
-          endId: currentPlan.endId,
-          segmentFromId: lastMap.fromPoiId,
-          segmentToId: lastMap.toPoiId,
-          highlightIds: lastMap.highlightIds || [],
-          currentPositionPoiId: lastMap.toPoiId
-        });
-      }
+      drawCurrentPlanMapView(lastMap, lastMap?.toPoiId);
     } else {
       activeStepIndex++;
       renderSteps();
       const map = steps[activeStepIndex]?.mapView;
-      if (map) {
-        drawFloorMap({
-          poiData: currentPlan.poiData,
-          buildingId: map.buildingId,
-          floorId: map.floorId,
-          startId: currentPlan.startId,
-          endId: currentPlan.endId,
-          segmentFromId: map.fromPoiId,
-          segmentToId: map.toPoiId,
-          highlightIds: map.highlightIds || [],
-          currentPositionPoiId: map.fromPoiId
-        });
-      }
+      drawCurrentPlanMapView(map, map?.fromPoiId);
     }
   };
 
@@ -941,105 +936,57 @@ export function initRoutePreview({ hostId }) {
   routeStepPrevEl?.addEventListener("click", handleStepPrev);
   routeStepNextEl?.addEventListener("click", handleStepNext);
 
-  // Updates route preview with selected POIs. showRoute controls whether to draw route line.
+  // -------- Public API --------
   const updateRoutePreview = (selection, poiData, showRoute = false) => {
     const { startId, endId } = selection;
-    
-    // Find POIs if they exist
+
     const startPoi = startId ? poiData.find((p) => String(p.id) === String(startId)) : null;
     const endPoi = endId ? poiData.find((p) => String(p.id) === String(endId)) : null;
-    
-    // Determine which building/floor to show on the map
-    // Priority: active step > destination > start
-    let mapBuildingId = "";
-    let mapFloorId = "";
-    
-    // Update route info (independent of showRoute).
-    startNameEl.textContent = startPoi ? startPoi.display_name : "-";
-    startDetailsEl.textContent = startPoi
-      ? `Building ${startPoi.building_id}, Floor ${startPoi.floor_id}`
-      : "-";
-    endNameEl.textContent = endPoi ? endPoi.display_name : "-";
-    endDetailsEl.textContent = endPoi ? `Building ${endPoi.building_id}, Floor ${endPoi.floor_id}` : "-";
+    const { buildingId: mapBuildingId, floorId: mapFloorId } = getDefaultMapTarget(startPoi, endPoi);
+    syncRouteInfo(startPoi, endPoi);
 
-    
-    if (endPoi) {
-      mapBuildingId = String(endPoi.building_id);
-      mapFloorId = String(endPoi.floor_id);
-    } else if (startPoi) {
-      mapBuildingId = String(startPoi.building_id);
-      mapFloorId = String(startPoi.floor_id);
-    }
-
-    // Clear steps until preview is requested.
     if (!showRoute) {
-      currentPlan = null;
-      activeStepIndex = 0;
-      arrived = false;
-      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
-      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
-      distanceValueEl.textContent = "-";
+      resetStepState();
       if (isModalOpen()) closeErrorModal();
-      if (mapBuildingId && mapFloorId) {
-        drawFloorMap({
-          poiData,
-          buildingId: mapBuildingId,
-          floorId: mapFloorId,
-          startId: startId || null,
-          endId: endId || null
-        });
-      } else {
-        floorMapEl.innerHTML = `<text x="200" y="150" text-anchor="middle" fill="#98a0b3" font-size="14">Select start and destination</text>`;
-      }
+      drawSelectionMap({
+        poiData,
+        buildingId: mapBuildingId,
+        floorId: mapFloorId,
+        startId,
+        endId,
+        emptyMessage: "Select start and destination"
+      });
       return;
     }
 
-
     if (!startPoi || !endPoi) {
-      distanceValueEl.textContent = "-";
-      currentPlan = null;
-      activeStepIndex = 0;
-      arrived = false;
-      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
-      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
-      if (mapBuildingId && mapFloorId) {
-        drawFloorMap({
-          poiData,
-          buildingId: mapBuildingId,
-          floorId: mapFloorId,
-          startId: startId || null,
-          endId: endId || null
-        });
-      }
+      resetStepState();
+      drawSelectionMap({
+        poiData,
+        buildingId: mapBuildingId,
+        floorId: mapFloorId,
+        startId,
+        endId
+      });
       return;
     }
 
     const plan = buildRoutePlan(poiData, startPoi, endPoi);
     if (!plan.ok) {
-      currentPlan = null;
-      activeStepIndex = 0;
-      arrived = false;
-      if (routeStepBoxEl) routeStepBoxEl.style.display = "none";
-      if (routeStepsPanelEl) routeStepsPanelEl.setAttribute("hidden", "");
-      distanceValueEl.textContent = "-";
+      resetStepState();
       openErrorModal(plan.reason);
-
-
-      mapBuildingId = String(startPoi.building_id);
-      mapFloorId = String(startPoi.floor_id);
-      drawFloorMap({
+      drawSelectionMap({
         poiData,
-        buildingId: mapBuildingId,
-        floorId: mapFloorId,
-        startId: startId || null,
-        endId: endId || null
+        buildingId: String(startPoi.building_id),
+        floorId: String(startPoi.floor_id),
+        startId,
+        endId
       });
       return;
     }
 
     if (isModalOpen()) closeErrorModal();
 
-    // Success: show steps panel and allow map-per-step.
     if (routeStepsPanelEl) routeStepsPanelEl.removeAttribute("hidden");
     currentPlan = {
       poiData,
@@ -1053,22 +1000,11 @@ export function initRoutePreview({ hostId }) {
 
     distanceValueEl.textContent = `${Math.round(plan.distanceMeters)}m`;
 
-    // Draw first step.
     const first = plan.steps[0]?.mapView;
     if (first) {
-      drawFloorMap({
-        poiData,
-        buildingId: first.buildingId,
-        floorId: first.floorId,
-        startId: String(startPoi.id),
-        endId: String(endPoi.id),
-        segmentFromId: first.fromPoiId,
-        segmentToId: first.toPoiId,
-        highlightIds: first.highlightIds || [],
-        currentPositionPoiId: first.fromPoiId
-      });
-    } else if (mapBuildingId && mapFloorId) {
-      drawFloorMap({
+      drawCurrentPlanMapView(first, first.fromPoiId);
+    } else {
+      drawSelectionMap({
         poiData,
         buildingId: mapBuildingId,
         floorId: mapFloorId,

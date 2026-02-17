@@ -1,20 +1,15 @@
-// Loads panel HTML, POI data, and initializes the search panel and route preview.
 async function bootstrap() {
   const searchPanelHost = document.querySelector("#searchPanel");
-  const routePreviewHost = document.querySelector("#routePreview");
-
-  // Load search panel HTML
-  const panelResponse = await fetch("./SearchPanel.html", { cache: "no-store" });
+  const panelResponse = await fetch("./SearchPanel.html");
   searchPanelHost.innerHTML = await panelResponse.text();
 
-  // Load route preview HTML
-  const routePreviewResponse = await fetch("./RoutePreview.html", { cache: "no-store" });
+  const routePreviewHost = document.querySelector("#routePreview");
+  const routePreviewResponse = await fetch("./RoutePreview.html");
   routePreviewHost.innerHTML = await routePreviewResponse.text();
 
-  const response = await fetch("./data.json", { cache: "no-store" });
+  const response = await fetch("./data.json");
   const INDOOR_POIS = await response.json();
 
-  // Extracts indoor type from POI.data JSON string.
   const getDomainType = (poi) => {
     if (!poi?.data) return "";
     try {
@@ -24,12 +19,6 @@ async function bootstrap() {
     }
   };
 
-  // Unique building IDs for the building dropdown - panel sorts for display
-  const buildingOptions = [...new Set(INDOOR_POIS.map((poi) => poi.building_id))].map((id) => ({
-    value: String(id),
-    label: `Building ${id}`
-  }));
-  // POI options with buildingId, floorId, and category for filtering
   const poiOptions = INDOOR_POIS.map((poi) => ({
     value: String(poi.id),
     label: `${poi.display_name} (Floor ${poi.floor_id})`,
@@ -46,11 +35,9 @@ async function bootstrap() {
   let currentSelection = {};
   let routePreview = null;
 
-  // Initialize search panel
   const { initSearchPanel } = await import("./search-panel.js");
-  const searchPanel = initSearchPanel({
+  initSearchPanel({
     hostId: "#searchPanel",
-    buildingOptions,
     poiOptions,
     onSelectionChange: (selection) => {
       currentSelection = selection;
@@ -65,7 +52,6 @@ async function bootstrap() {
     }
   });
 
-  // Initialize route preview
   const { initRoutePreview } = await import("./route-preview.js");
   routePreview = initRoutePreview({
     hostId: "#routePreview"

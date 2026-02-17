@@ -44,6 +44,12 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 - The calculateDistance function estimates the distance between two latitude/longitude points by converting degree differences into meters and applying the Euclidean distance formula, which is accurate enough for small indoor areas. The normalizeCoordinates function converts real-world geographic coordinates of POIs into scaled SVG screen coordinates, ensuring they fit properly within a defined map boundary while maintaining their relative spatial positions.
 
+In the code, it uses two graphs for indoor routing:
+    - A building graph
+    - A floor graph
+    The building graph has one node per building and connects buildings that share a connector POI with the same name. BFS on this graph gives the sequence of buildings and connectors for cross-building routes. 
+    The floor graph handles movement within a building. Nodes are floor IDs, and floors are connected if they share a vertical link. A weighted shortest-path search prefers elevators over stairs, generating steps like take elevator/stairs to next floor.
+
 In some parts, I used Cursor (AI-powered code editor) to implement some parts easier and improve code quality.
 
 ## Limitations

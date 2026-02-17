@@ -50,6 +50,8 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 - All matching results are shown, instead of showing top 10, etc.
 
+- We assume that between two buildings, there is at most one connector.
+
 ## Future improvemnets
 
 - We can add tap option on the POIs. In this case user can selects the start/destination POIs without only typing.

@@ -23,18 +23,33 @@ Propose what the Info popup should show instead of only a floor plan update date
 ### Description
 _Write a concise description of the enhancement._
 
-_Info Popup icon appears only when user selects start/destination and path is suggested. It shows updated map date. Path details can be added to the Info Popup.These details are: - Travel time(minute) - Access. Access details show the number of facilities on the path to help user be more cautious about the path and be informed._
+- Info Popup icon appears only when user selects start/destination and path is suggested. It shows updated map date. Path details can be added to the Info Popup.These details are:
+    - Travel time(minute) 
+    - Access (number of stairs/elevators on the path).
+Access details show the number of facilities on the path to help user be more cautious about the path and be informed
 
 ### Example content
 _Provide example text/structure you would show in the popup._
 
-_The proposed Info Popup file is saved as "Popup proposal.png"._
+The proposed Info Popup file is saved as "Popup proposal.png"
 
 ### Design suggestion
 _Provide a simple layout suggestion or hierarchy (title/sections/actions)._
 
+The proposed Info Popup file is saved as "Popup proposal.png"
+
 ### Acceptance criteria
 _List measurable criteria for success._
+
+- Popup icon click rate. (#Icon click/#Route sessions)
+    This will show how many times a user clicks on the this icon during a route or it is not clicked
+    at all.
+
+- Average time spent on the Popup.
+    Longer time spent watching time shows that information is useful for the user.
+
+- Number of cancelled navigation.
+    After seeing this information, less number of cancelation of navigation route shows the user satisfaction of access.
 
 ### Optional
 _If helpful, include risks/assumptions._

@@ -413,11 +413,6 @@ export function initRoutePreview({ hostId }) {
 
       poiGroup.addEventListener("mouseenter", showTooltipForPoi);
       poiGroup.addEventListener("mouseleave", () => hidePoiTooltip(100));
-      // Tap/click for touch devices (hover doesn't work on mobile)
-      poiGroup.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showTooltipForPoi();
-      });
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", poi.x);
@@ -478,38 +473,24 @@ export function initRoutePreview({ hostId }) {
   const distanceBetweenPois = (a, b) =>
     calculateDistance(a.location.latitude, a.location.longitude, b.location.latitude, b.location.longitude);
 
-  const findBestVerticalConnectorPair = ({ poiData, buildingId, fromFloorId, toFloorId, fromPoi, toPoi }) => {
-    const tryKinds = ["ELEVATOR", "STAIRS"]; // elevator-first
-
-    for (const kind of tryKinds) {
-      const fromCandidates = getVerticalConnectors(poiData, buildingId, fromFloorId, kind);
-      const toCandidates = getVerticalConnectors(poiData, buildingId, toFloorId, kind);
-      if (fromCandidates.length === 0 || toCandidates.length === 0) continue;
-
-      let best = null;
-      let bestCost = Number.POSITIVE_INFINITY;
-      for (const a of fromCandidates) {
-        for (const b of toCandidates) {
-          const cost = distanceBetweenPois(fromPoi, a) + distanceBetweenPois(b, toPoi);
-          if (cost < bestCost) {
-            bestCost = cost;
-            best = { kind, fromConnector: a, toConnector: b };
-          }
-        }
+  const pickNearest = (candidates, referencePoi) => {
+    let best = candidates[0];
+    let bestD = Number.POSITIVE_INFINITY;
+    for (const c of candidates) {
+      const d = distanceBetweenPois(referencePoi, c);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
       }
-      if (best) return best;
     }
-
-    return null;
+    return best;
   };
 
   const buildBuildingGraph = (poiData) => {
     // adjacency: buildingId -> Map(neighborBuildingId -> connectorName)
-    /** @type {Map<string, Map<string, string>>} */
     const adjacency = new Map();
 
     const connectors = poiData.filter((p) => isConnector(p) && String(p.display_name || "").trim() !== "");
-    /** @type {Map<string, any[]>} */
     const byName = new Map();
     connectors.forEach((p) => {
       const name = String(p.display_name).trim();
@@ -542,9 +523,7 @@ export function initRoutePreview({ hostId }) {
     if (!start || !goal) return null;
     if (start === goal) return [];
 
-    /** @type {Map<string, {from: string, connectorName: string}>} */
     const prev = new Map();
-    /** @type {string[]} */
     const queue = [start];
     prev.set(start, null);
 
@@ -562,7 +541,6 @@ export function initRoutePreview({ hostId }) {
 
     if (!prev.has(goal)) return null;
 
-    /** @type {{fromBuildingId: string, toBuildingId: string, connectorName: string}[]} */
     const edges = [];
     let cur = goal;
     while (cur !== start) {
@@ -583,7 +561,6 @@ export function initRoutePreview({ hostId }) {
     const fromFloorId = String(fromPoi.floor_id);
     const toFloorId = String(toPoi.floor_id);
 
-    /** @type {any[]} */
     const steps = [];
     let distanceMeters = 0;
     let requiresStairs = false;
@@ -620,7 +597,6 @@ export function initRoutePreview({ hostId }) {
     const hasStairsOnFloor = (floorId) =>
       getVerticalConnectors(poiData, buildingId, floorId, "STAIRS").length > 0;
 
-    /** @type {Map<string, {toFloorId: string, kind: "ELEVATOR"|"STAIRS"}[]>} */
     const floorAdjacency = new Map(allFloors.map((f) => [f, []]));
 
     const addFloorEdge = (from, to, kind) => {
@@ -646,11 +622,8 @@ export function initRoutePreview({ hostId }) {
 
     const edgeWeight = (kind) => (kind === "ELEVATOR" ? 1 : 100) + 0.1; // stairs are heavily penalized
 
-    /** @type {Map<string, number>} */
     const dist = new Map(allFloors.map((f) => [f, Number.POSITIVE_INFINITY]));
-    /** @type {Map<string, {fromFloorId: string, kind: "ELEVATOR"|"STAIRS"} | null>} */
     const prev = new Map();
-    /** @type {Set<string>} */
     const unvisited = new Set(allFloors);
 
     dist.set(fromFloorId, 0);
@@ -698,7 +671,6 @@ export function initRoutePreview({ hostId }) {
     }
 
     // Reconstruct the floor path.
-    /** @type {{fromFloorId: string, toFloorId: string, kind: "ELEVATOR"|"STAIRS"}[]} */
     const floorPath = [];
     let curFloor = toFloorId;
     while (curFloor !== fromFloorId) {
@@ -707,19 +679,6 @@ export function initRoutePreview({ hostId }) {
       curFloor = info.fromFloorId;
     }
     floorPath.reverse();
-
-    const pickNearest = (candidates, referencePoi) => {
-      let best = candidates[0];
-      let bestD = Number.POSITIVE_INFINITY;
-      for (const c of candidates) {
-        const d = distanceBetweenPois(referencePoi, c);
-        if (d < bestD) {
-          bestD = d;
-          best = c;
-        }
-      }
-      return best;
-    };
 
     let currentPoi = fromPoi;
     for (const edge of floorPath) {
@@ -735,7 +694,7 @@ export function initRoutePreview({ hostId }) {
       const fromConnector = pickNearest(fromConnectors, currentPoi);
       const toConnector = pickNearest(toConnectors, toPoi);
 
-      // Step: go to elevator/stairs on the current floor (only if not already there).
+      // Step: go to elevator/stairs on the current floor
       if (String(currentPoi.id) !== String(fromConnector.id)) {
         const segDist = distanceBetweenPois(currentPoi, fromConnector);
         steps.push({
@@ -817,7 +776,6 @@ export function initRoutePreview({ hostId }) {
       };
     }
 
-    /** @type {any[]} */
     const steps = [];
     let distanceMeters = 0;
     let requiresStairs = false;
@@ -838,17 +796,9 @@ export function initRoutePreview({ hostId }) {
       }
 
       // Pick the connector endpoint in the current building closest to our current position.
-      let connectorFrom = fromCandidates[0];
-      let best = Number.POSITIVE_INFINITY;
-      for (const c of fromCandidates) {
-        const d = distanceBetweenPois(currentPoi, c);
-        if (d < best) {
-          best = d;
-          connectorFrom = c;
-        }
-      }
+      const connectorFrom = pickNearest(fromCandidates, currentPoi);
 
-      // Pick a connector endpoint in the next building (prefer same floor as connectorFrom if available).
+      // Pick a connector endpoint in the next building
       const sameFloor = toCandidates.find((c) => String(c.floor_id) === String(connectorFrom.floor_id));
       const connectorTo = sameFloor || toCandidates[0];
 
@@ -891,7 +841,6 @@ export function initRoutePreview({ hostId }) {
   // Step list + map-per-step state
   let activeStepIndex = 0;
   let arrived = false;
-  /** @type {any|null} */
   let currentPlan = null;
 
   const handleStepPrev = () => {
@@ -1013,7 +962,7 @@ export function initRoutePreview({ hostId }) {
     endNameEl.textContent = endPoi ? endPoi.display_name : "-";
     endDetailsEl.textContent = endPoi ? `Building ${endPoi.building_id}, Floor ${endPoi.floor_id}` : "-";
 
-    // Default map when not showing steps.
+    
     if (endPoi) {
       mapBuildingId = String(endPoi.building_id);
       mapFloorId = String(endPoi.floor_id);

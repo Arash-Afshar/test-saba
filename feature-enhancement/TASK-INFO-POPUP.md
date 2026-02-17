@@ -53,3 +53,5 @@ _List measurable criteria for success._
 
 ### Optional
 _If helpful, include risks/assumptions._
+
+- Without crowd, construction, and obstacle information it is not a real-time experience for the user.

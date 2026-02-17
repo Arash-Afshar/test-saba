@@ -48,6 +48,8 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 - Euclidean distance is used for distance calculation.
 
+- All matching results are shown, instead of showing top 10, etc.
+
 ## Future improvemnets
 
 - We can add tap option on the POIs. In this case user can selects the start/destination POIs without only typing.

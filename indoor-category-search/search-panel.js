@@ -1,8 +1,8 @@
-// Initializes the search panel: From/To picker sheet, filters, and preview button.
 export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPreview }) {
   const host = document.querySelector(hostId);
   if (!host) return;
 
+  // -------- Selector initializations --------
   const fromTriggerEl = host.querySelector("#fromTrigger");
   const fromSelectionEl = host.querySelector("#fromSelection");
   const toTriggerEl = host.querySelector("#toTrigger");
@@ -18,7 +18,6 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
   const pickerStatusEl = host.querySelector("#pickerStatus");
   const pickerResultsEl = host.querySelector("#pickerResults");
   const filterToggleEl = host.querySelector("#filterToggle");
-  const filterSummaryEl = host.querySelector("#filterSummary");
   const filterContentEl = host.querySelector("#filterContent");
   const filterBuildingEl = host.querySelector("#filterBuilding");
   const filterFloorEl = host.querySelector("#filterFloor");
@@ -26,26 +25,22 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
   const filterTypeEl = host.querySelector("#filterType");
   const filterOpenNowEl = host.querySelector("#filterOpenNow");
 
-  /** @type {string} */
   let startId = "";
-  /** @type {string} */
   let endId = "";
-  /** @type {"from"|"to"|null} */
   let pickerMode = null;
-  /** @type {string} */
   let selectedCategoryChip = "";
-  /** @type {string} */
   let filterBuilding = "";
-  /** @type {string} */
   let filterFloor = "";
-  /** @type {string} */
   let filterCategory = "";
-  /** @type {string} */
   let filterType = "";
-  /** @type {boolean} */
   let filterOpenNow = false;
 
-  const QUICK_CATEGORIES = ["ENTRANCE", "WASHROOM", "ELEVATOR", "INFORMATION", "FOOD"];
+  // -------- Shared helpers --------
+  const escapeHtml = (value) => {
+    const div = document.createElement("div");
+    div.textContent = value;
+    return div.innerHTML;
+  };
 
   const compareByName = (a, b) =>
     (a.displayName || a.label || "").localeCompare(b.displayName || b.label || "", undefined, {
@@ -57,19 +52,113 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
   const formatPoiShort = (poi) => poi?.displayName || poi?.label || "Unknown";
 
   const getRatingDisplay = (poi) => {
-    const rd = poi.ratingData || poi.rating_data;
-    if (!rd) return "";
-    const avg = rd["ratings-average"] || rd.ratingsAverage;
-    return avg ? `★ ${avg}` : "";
+    const ratingData = poi.ratingData || poi.rating_data;
+    if (!ratingData) return "";
+    const average = ratingData["ratings-average"] || ratingData.ratingsAverage;
+    return average ? `★ ${average}` : "";
   };
 
-  const doesPoiMatchFilters = (poi, endpoint, query) => {
+  // -------- UI sync helpers --------
+  const syncFilterControls = () => {
+    if (filterBuildingEl) filterBuildingEl.value = filterBuilding;
+    if (filterFloorEl) filterFloorEl.value = filterFloor;
+    if (filterCategoryEl) filterCategoryEl.value = filterCategory;
+    if (filterTypeEl) filterTypeEl.value = filterType;
+    if (filterOpenNowEl) filterOpenNowEl.checked = filterOpenNow;
+  };
+
+  const syncCategoryChipState = () => {
+    pickerChipsEl?.querySelectorAll(".chip").forEach((chip) => {
+      chip.setAttribute("aria-pressed", chip.dataset.value === selectedCategoryChip ? "true" : "false");
+    });
+  };
+
+  // -------- Data preparation --------
+  const getUniqueSortedValues = (pickValue, sortFn) => {
+    const values = [...new Set(poiOptions.map(pickValue).filter(Boolean))];
+    return sortFn ? values.sort(sortFn) : values.sort();
+  };
+
+  const filterData = {
+    buildings: getUniqueSortedValues((poi) => poi.buildingId, (a, b) => Number(a) - Number(b)),
+    floors: getUniqueSortedValues((poi) => poi.floorId, (a, b) => Number(a) - Number(b)),
+    categories: getUniqueSortedValues((poi) => (poi.categoryName || "").toUpperCase()),
+    types: getUniqueSortedValues((poi) => poi.domainType)
+  };
+
+  const populateSelect = (selectEl, placeholder, values) => {
+    if (!selectEl) return;
+    selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+    values.forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      selectEl.appendChild(option);
+    });
+  };
+
+  const setupFilterControls = () => {
+    populateSelect(filterBuildingEl, "Select building", filterData.buildings);
+    populateSelect(filterFloorEl, "Select floor", filterData.floors);
+    populateSelect(filterCategoryEl, "Select category", filterData.categories);
+    populateSelect(filterTypeEl, "Select type", filterData.types);
+  };
+
+  const QUICK_CATEGORIES = ["ENTRANCE", "WASHROOM", "ELEVATOR", "INFORMATION", "FOOD"];
+
+  const setupCategoryChips = () => {
+    if (!pickerChipsEl) return;
+
+    pickerChipsEl.innerHTML = "";
+    QUICK_CATEGORIES.forEach((category) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.dataset.value = category;
+      chip.setAttribute("aria-pressed", "false");
+      chip.textContent = category;
+
+      chip.addEventListener("click", () => {
+        selectedCategoryChip = selectedCategoryChip === category ? "" : category;
+        syncCategoryChipState();
+        renderPickerResults();
+      });
+
+      pickerChipsEl.appendChild(chip);
+    });
+  };
+
+  // -------- Data filtering --------
+  const readFiltersFromControls = () => {
+    filterBuilding = filterBuildingEl?.value || "";
+    filterFloor = filterFloorEl?.value || "";
+    filterCategory = filterCategoryEl?.value || "";
+    filterType = filterTypeEl?.value || "";
+    filterOpenNow = Boolean(filterOpenNowEl?.checked);
+  };
+
+  const resetPickerFilters = () => {
+    selectedCategoryChip = "";
+    filterBuilding = "";
+    filterFloor = "";
+    filterCategory = "";
+    filterType = "";
+    filterOpenNow = false;
+    syncCategoryChipState();
+    syncFilterControls();
+  };
+
+  const buildFilterSearchText = (poi) =>
+    `${poi.displayName || ""} ${poi.categoryName || ""} ${poi.domainType || ""} building ${poi.buildingId || ""} floor ${poi.floorId || ""}`.toLowerCase();
+
+  const doesPoiMatchFilters = (poi, query) => {
     if (!poi) return false;
-    const q = String(query || "").trim().toLowerCase();
-    if (q) {
-      const hay = `${poi.displayName || ""} ${poi.categoryName || ""} ${poi.domainType || ""} building ${poi.buildingId || ""} floor ${poi.floorId || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+
+    if (normalizedQuery && !buildFilterSearchText(poi).includes(normalizedQuery)) {
+      return false;
     }
+
     if (selectedCategoryChip && String(poi.categoryName || "").toUpperCase() !== selectedCategoryChip) return false;
     if (filterBuilding && String(poi.buildingId) !== filterBuilding) return false;
     if (filterFloor && String(poi.floorId) !== filterFloor) return false;
@@ -77,6 +166,86 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
     if (filterType && String(poi.domainType) !== filterType) return false;
     if (filterOpenNow && poi.isOpen !== true) return false;
     return true;
+  };
+
+  const toggleFilters = () => {
+    if (!filterContentEl || !filterToggleEl) return;
+    const willExpand = filterContentEl.hasAttribute("hidden");
+    filterContentEl.toggleAttribute("hidden", !willExpand);
+    filterToggleEl.setAttribute("aria-expanded", String(willExpand));
+    filterToggleEl.querySelector(".filter-toggle__icon")?.setAttribute("aria-hidden", "true");
+  };
+
+  const getPickerMatches = () => {
+    const query = pickerSearchEl?.value || "";
+    return poiOptions.filter((poi) => doesPoiMatchFilters(poi, query)).sort(compareByName);
+  };
+
+  // -------- Selection state --------
+  const updateButtons = () => {
+    const hasStart = Boolean(startId);
+    const hasEnd = Boolean(endId);
+    if (clearButtonEl) clearButtonEl.disabled = !(hasStart || hasEnd);
+    if (swapButtonEl) swapButtonEl.disabled = !(hasStart && hasEnd);
+    if (previewButtonEl) previewButtonEl.disabled = !(hasStart && hasEnd);
+    fromTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasStart);
+    toTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasEnd);
+  };
+
+  const notifySelectionChange = () => {
+    onSelectionChange?.({
+      startId,
+      endId,
+      domainType: filterType,
+      openNowOnly: filterOpenNow
+    });
+  };
+
+  const setStart = (poiId) => {
+    const poi = getPoiById(poiId);
+    if (!poi) return;
+    startId = String(poi.value);
+    if (fromSelectionEl) fromSelectionEl.textContent = formatPoiShort(poi);
+    updateButtons();
+    notifySelectionChange();
+    if (pickerStatusEl) pickerStatusEl.textContent = `Start set to ${formatPoiShort(poi)}.`;
+  };
+
+  const setDestination = (poiId) => {
+    const poi = getPoiById(poiId);
+    if (!poi) return;
+    endId = String(poi.value);
+    if (toSelectionEl) toSelectionEl.textContent = formatPoiShort(poi);
+    updateButtons();
+    notifySelectionChange();
+    if (pickerStatusEl) pickerStatusEl.textContent = `Destination set to ${formatPoiShort(poi)}.`;
+  };
+
+  const clearSelection = () => {
+    startId = "";
+    endId = "";
+    if (fromSelectionEl) fromSelectionEl.textContent = "Search here";
+    if (toSelectionEl) toSelectionEl.textContent = "Choose destination";
+    updateButtons();
+    notifySelectionChange();
+  };
+
+  const swapSelection = () => {
+    if (!startId || !endId) return;
+    [startId, endId] = [endId, startId];
+    const startPoi = getPoiById(startId);
+    const endPoi = getPoiById(endId);
+    if (fromSelectionEl) fromSelectionEl.textContent = startPoi ? formatPoiShort(startPoi) : "Choose start";
+    if (toSelectionEl) toSelectionEl.textContent = endPoi ? formatPoiShort(endPoi) : "Choose destination";
+    updateButtons();
+    notifySelectionChange();
+  };
+
+  // -------- Picker layout + rendering for responsiveness --------
+  const updatePickerLandscapeClass = () => {
+    if (!pickerSheetEl) return;
+    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+    pickerSheetEl.classList.toggle("picker-sheet--landscape", isLandscape && !pickerSheetEl.hidden);
   };
 
   const sizePickerToMap = () => {
@@ -97,30 +266,95 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
     }
   };
 
-  const updatePickerLandscapeClass = () => {
-    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-    pickerSheetEl?.classList.toggle("picker-sheet--landscape", isLandscape && !pickerSheetEl.hidden);
+  const getPickerDismissTarget = () => (pickerMode === "from" ? fromTriggerEl : toTriggerEl);
+
+  const closePickerAndFocus = (triggerEl) => {
+    if (pickerSheetEl) {
+      pickerSheetEl.hidden = true;
+      pickerSheetEl.setAttribute("aria-hidden", "true");
+      pickerSheetEl.classList.remove("picker-sheet--landscape");
+    }
+    fromTriggerEl?.setAttribute("aria-expanded", "false");
+    toTriggerEl?.setAttribute("aria-expanded", "false");
+    pickerMode = null;
+    triggerEl?.focus();
+  };
+
+  const handleResultPick = (poiId) => {
+    const mode = pickerMode;
+    const trigger = mode === "from" ? toTriggerEl : (startId ? previewButtonEl : fromTriggerEl);
+    closePickerAndFocus(trigger);
+    if (mode === "from") setStart(poiId);
+    if (mode === "to") setDestination(poiId);
+  };
+
+  const renderPickerResults = () => {
+    if (!pickerResultsEl || !pickerMode) return;
+    const matches = getPickerMatches();
+
+    pickerResultsEl.innerHTML = "";
+    if (pickerStatusEl) {
+      const label = matches.length === 1 ? "result" : "results";
+      pickerStatusEl.textContent = matches.length === 0 ? "No matches." : `${matches.length} ${label}.`;
+    }
+
+    if (matches.length === 0) {
+      const emptyItem = document.createElement("li");
+      emptyItem.className = "picker-result picker-result--empty";
+      emptyItem.textContent = "No matches";
+      pickerResultsEl.appendChild(emptyItem);
+      return;
+    }
+
+    matches.forEach((poi) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "picker-result";
+      button.dataset.poiId = String(poi.value);
+
+      const name = poi.displayName || poi.label || "Unknown";
+      const category = poi.categoryName || "Location";
+      const building = poi.buildingId ? `Building ${poi.buildingId}` : "";
+      const floor = poi.floorId ? `Floor ${poi.floorId}` : "";
+      const subtitle = [category, building, floor].filter(Boolean).join(" · ");
+      const rating = getRatingDisplay(poi);
+      const openLabel = poi.isOpen ? "Open" : "Closed";
+      const openClass = poi.isOpen ? "picker-result__open" : "picker-result__closed";
+
+      button.innerHTML = `
+        <span class="picker-result__main">
+          <span class="picker-result__name">${escapeHtml(name)}</span>
+          <span class="picker-result__sub">${escapeHtml(subtitle)}</span>
+        </span>
+        <span class="picker-result__meta">
+          ${rating ? `<span class="picker-result__rating">${escapeHtml(rating)}</span>` : ""}
+          <span class="picker-result__status ${openClass}">${openLabel}</span>
+        </span>
+      `;
+
+      const ariaParts = [name, category];
+      if (poi.buildingId) ariaParts.push(`Building ${poi.buildingId}`);
+      if (poi.floorId) ariaParts.push(`Floor ${poi.floorId}`);
+      ariaParts.push(openLabel);
+      button.setAttribute("aria-label", ariaParts.join(", "));
+
+      button.addEventListener("click", () => handleResultPick(poi.value));
+
+      item.appendChild(button);
+      pickerResultsEl.appendChild(item);
+    });
   };
 
   const openPicker = (mode) => {
     pickerMode = mode;
-    pickerSearchEl.value = "";
-    selectedCategoryChip = "";
-    pickerChipsEl.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
-    filterBuilding = "";
-    filterFloor = "";
-    filterCategory = "";
-    filterType = "";
-    filterOpenNow = false;
-    if (filterBuildingEl) filterBuildingEl.value = "";
-    if (filterFloorEl) filterFloorEl.value = "";
-    if (filterCategoryEl) filterCategoryEl.value = "";
-    if (filterTypeEl) filterTypeEl.value = "";
-    if (filterOpenNowEl) filterOpenNowEl.checked = false;
-    updateFilterSummary();
+    if (pickerSearchEl) pickerSearchEl.value = "";
+    resetPickerFilters();
 
-    pickerSheetEl.hidden = false;
-    pickerSheetEl.removeAttribute("aria-hidden");
+    if (pickerSheetEl) {
+      pickerSheetEl.hidden = false;
+      pickerSheetEl.removeAttribute("aria-hidden");
+    }
     fromTriggerEl?.setAttribute("aria-expanded", mode === "from" ? "true" : "false");
     toTriggerEl?.setAttribute("aria-expanded", mode === "to" ? "true" : "false");
 
@@ -130,306 +364,78 @@ export function initSearchPanel({ hostId, poiOptions, onSelectionChange, onPrevi
     requestAnimationFrame(() => pickerSearchEl?.focus());
   };
 
-  const closePickerAndFocus = (triggerEl) => {
-    pickerSheetEl.hidden = true;
-    pickerSheetEl.setAttribute("aria-hidden", "true");
-    pickerSheetEl?.classList.remove("picker-sheet--landscape");
-    fromTriggerEl?.setAttribute("aria-expanded", "false");
-    toTriggerEl?.setAttribute("aria-expanded", "false");
-    pickerMode = null;
-    triggerEl?.focus();
-  };
-
-  const updateFilterSummary = () => {
-    if (!filterSummaryEl) return;
-    const parts = [];
-    if (filterBuilding) parts.push(filterBuilding);
-    if (filterFloor) parts.push(filterFloor);
-    if (filterCategory) parts.push(filterCategory);
-    if (filterType) parts.push(filterType);
-    if (filterOpenNow) parts.push("Open now");
-    filterSummaryEl.textContent = parts.length ? parts.join(", ") : "Filters";
-  };
-
-  const renderPickerResults = () => {
-    if (!pickerResultsEl || !pickerMode) return;
-    const query = pickerSearchEl?.value || "";
-    const endpoint = pickerMode;
-    const matches = poiOptions
-      .filter((p) => doesPoiMatchFilters(p, endpoint, query))
-      .sort(compareByName)
-      .slice(0, 24);
-
-    pickerResultsEl.innerHTML = "";
-    if (pickerStatusEl) {
-      pickerStatusEl.textContent = matches.length === 0 ? "No matches." : `${matches.length} result${matches.length === 1 ? "" : "s"}.`;
-    }
-
-    if (matches.length === 0) {
-      const li = document.createElement("li");
-      li.className = "picker-result picker-result--empty";
-      li.textContent = "No matches";
-      pickerResultsEl.appendChild(li);
-      return;
-    }
-
-    matches.forEach((poi) => {
-      const li = document.createElement("li");
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "picker-result";
-      btn.dataset.poiId = String(poi.value);
-
-      const name = poi.displayName || poi.label || "Unknown";
-      const cat = poi.categoryName || "Location";
-      const b = poi.buildingId ? `Building ${poi.buildingId}` : "";
-      const f = poi.floorId ? `Floor ${poi.floorId}` : "";
-      const sub = [cat, b, f].filter(Boolean).join(" · ");
-      const rating = getRatingDisplay(poi);
-      const openLabel = poi.isOpen ? "Open" : "Closed";
-      const openClass = poi.isOpen ? "picker-result__open" : "picker-result__closed";
-
-      btn.innerHTML = `
-        <span class="picker-result__main">
-          <span class="picker-result__name">${escapeHtml(name)}</span>
-          <span class="picker-result__sub">${escapeHtml(sub)}</span>
-        </span>
-        <span class="picker-result__meta">
-          ${rating ? `<span class="picker-result__rating">${escapeHtml(rating)}</span>` : ""}
-          <span class="picker-result__status ${openClass}">${openLabel}</span>
-        </span>
-      `;
-      btn.setAttribute("aria-label", `${name}, ${cat}, Building ${poi.buildingId}, Floor ${poi.floorId}, ${openLabel}`);
-
-      btn.addEventListener("click", () => {
-        const mode = pickerMode;
-        const trigger = mode === "from" ? toTriggerEl : (startId ? previewButtonEl : fromTriggerEl);
-        closePickerAndFocus(trigger);
-        if (mode === "from") {
-          setStart(poi.value);
-        } else {
-          setDestination(poi.value);
-        }
+  // -------- Event bindings --------
+  const bindFilterEvents = () => {
+    const controls = [filterBuildingEl, filterFloorEl, filterCategoryEl, filterTypeEl, filterOpenNowEl];
+    controls.forEach((control) => {
+      control?.addEventListener("change", () => {
+        readFiltersFromControls();
+        renderPickerResults();
       });
-
-      li.appendChild(btn);
-      pickerResultsEl.appendChild(li);
     });
+
+    filterToggleEl?.addEventListener("click", toggleFilters);
   };
 
-  const escapeHtml = (s) => {
-    const div = document.createElement("div");
-    div.textContent = s;
-    return div.innerHTML;
+  const bindPickerEvents = () => {
+    pickerSearchEl?.addEventListener("input", () => renderPickerResults());
+    pickerSearchEl?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closePickerAndFocus(getPickerDismissTarget());
+      }
+      if (event.key === "Enter") {
+        const firstResult = pickerResultsEl?.querySelector(".picker-result:not(.picker-result--empty)");
+        if (firstResult) firstResult.click();
+      }
+    });
+
+    pickerCloseEl?.addEventListener("click", () => closePickerAndFocus(getPickerDismissTarget()));
+    pickerSheetEl?.querySelector(".picker-sheet__backdrop")?.addEventListener("click", () => closePickerAndFocus(getPickerDismissTarget()));
   };
 
-  const setStart = (poiId) => {
-    const poi = getPoiById(poiId);
-    if (!poi) return;
-    startId = String(poi.value);
-    fromSelectionEl.textContent = formatPoiShort(poi);
-    updateButtons();
-    notifySelectionChange();
-    if (pickerStatusEl) pickerStatusEl.textContent = `Start set to ${formatPoiShort(poi)}.`;
-  };
-
-  const setDestination = (poiId) => {
-    const poi = getPoiById(poiId);
-    if (!poi) return;
-    endId = String(poi.value);
-    toSelectionEl.textContent = formatPoiShort(poi);
-    updateButtons();
-    notifySelectionChange();
-    if (pickerStatusEl) pickerStatusEl.textContent = `Destination set to ${formatPoiShort(poi)}.`;
-  };
-
-  const updateButtons = () => {
-    const hasStart = Boolean(startId);
-    const hasEnd = Boolean(endId);
-    clearButtonEl.disabled = !(hasStart || hasEnd);
-    swapButtonEl.disabled = !(hasStart && hasEnd);
-    previewButtonEl.disabled = !(hasStart && hasEnd);
-    fromTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasStart);
-    toTriggerEl?.closest(".from-to-field")?.classList.toggle("has-selection", hasEnd);
-  };
-
-  const notifySelectionChange = () => {
-    onSelectionChange?.({
-      startId,
-      endId,
-      domainType: filterType,
-      openNowOnly: filterOpenNow
+  const bindGlobalEvents = () => {
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && pickerSheetEl && !pickerSheetEl.hidden) {
+        closePickerAndFocus(getPickerDismissTarget());
+      }
     });
-  };
 
-  // Populate filter dropdowns
-  const buildings = [...new Set(poiOptions.map((p) => p.buildingId).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
-  const floors = [...new Set(poiOptions.map((p) => p.floorId).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
-  const categories = [...new Set(poiOptions.map((p) => (p.categoryName || "").toUpperCase()).filter(Boolean))].sort();
-  const types = [...new Set(poiOptions.map((p) => p.domainType).filter(Boolean))].sort();
-
-  if (filterBuildingEl) {
-    filterBuildingEl.innerHTML = '<option value="">Select building</option>';
-    buildings.forEach((id) => {
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = id;
-      filterBuildingEl.appendChild(opt);
-    });
-  }
-  if (filterFloorEl) {
-    filterFloorEl.innerHTML = '<option value="">Select floor</option>';
-    floors.forEach((id) => {
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = id;
-      filterFloorEl.appendChild(opt);
-    });
-  }
-  if (filterCategoryEl) {
-    filterCategoryEl.innerHTML = '<option value="">Select category</option>';
-    categories.forEach((c) => {
-      const opt = document.createElement("option");
-      opt.value = c;
-      opt.textContent = c;
-      filterCategoryEl.appendChild(opt);
-    });
-  }
-  if (filterTypeEl) {
-    filterTypeEl.innerHTML = '<option value="">Select type</option>';
-    types.forEach((t) => {
-      const opt = document.createElement("option");
-      opt.value = t;
-      opt.textContent = t;
-      filterTypeEl.appendChild(opt);
-    });
-  }
-
-  // Quick category chips
-  QUICK_CATEGORIES.forEach((cat) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "chip";
-    btn.dataset.value = cat;
-    btn.setAttribute("aria-pressed", "false");
-    btn.textContent = cat;
-    btn.addEventListener("click", () => {
-      selectedCategoryChip = selectedCategoryChip === cat ? "" : cat;
-      pickerChipsEl.querySelectorAll(".chip").forEach((c) => {
-        c.setAttribute("aria-pressed", c.dataset.value === selectedCategoryChip ? "true" : "false");
-      });
-      renderPickerResults();
-    });
-    pickerChipsEl.appendChild(btn);
-  });
-
-  // Filter change handlers
-  [filterBuildingEl, filterFloorEl, filterCategoryEl, filterTypeEl].forEach((el) => {
-    el?.addEventListener("change", () => {
-      filterBuilding = filterBuildingEl?.value || "";
-      filterFloor = filterFloorEl?.value || "";
-      filterCategory = filterCategoryEl?.value || "";
-      filterType = filterTypeEl?.value || "";
-      updateFilterSummary();
-      renderPickerResults();
-    });
-  });
-  filterOpenNowEl?.addEventListener("change", () => {
-    filterOpenNow = Boolean(filterOpenNowEl.checked);
-    updateFilterSummary();
-    renderPickerResults();
-  });
-
-  // Filter toggle
-  filterToggleEl?.addEventListener("click", () => {
-    const expanded = filterContentEl?.hasAttribute("hidden");
-    filterContentEl?.toggleAttribute("hidden", !expanded);
-    filterToggleEl?.setAttribute("aria-expanded", String(expanded));
-    filterToggleEl.querySelector(".filter-toggle__icon")?.setAttribute("aria-hidden", "true");
-  });
-
-  // Picker search
-  pickerSearchEl?.addEventListener("input", () => renderPickerResults());
-  pickerSearchEl?.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
-    }
-    if (e.key === "Enter") {
-      const first = pickerResultsEl?.querySelector(".picker-result:not(.picker-result--empty)");
-      if (first) first.click();
-    }
-  });
-
-  // Picker close button
-  pickerCloseEl?.addEventListener("click", () => {
-    closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
-  });
-
-  // Picker backdrop
-  pickerSheetEl?.querySelector(".picker-sheet__backdrop")?.addEventListener("click", () => {
-    closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && pickerSheetEl && !pickerSheetEl.hidden) {
-      closePickerAndFocus(pickerMode === "from" ? fromTriggerEl : toTriggerEl);
-    }
-  });
-
-  window.addEventListener("resize", () => {
-    if (pickerSheetEl && !pickerSheetEl.hidden) {
-      updatePickerLandscapeClass();
-      sizePickerToMap();
-    }
-  });
-  window.addEventListener("orientationchange", () => {
-    if (pickerSheetEl && !pickerSheetEl.hidden) {
-      setTimeout(() => {
+    window.addEventListener("resize", () => {
+      if (pickerSheetEl && !pickerSheetEl.hidden) {
         updatePickerLandscapeClass();
         sizePickerToMap();
-      }, 100);
-    }
-  });
+      }
+    });
 
-  // From/To triggers
-  fromTriggerEl?.addEventListener("click", () => openPicker("from"));
-  toTriggerEl?.addEventListener("click", () => openPicker("to"));
+    window.addEventListener("orientationchange", () => {
+      if (pickerSheetEl && !pickerSheetEl.hidden) {
+        setTimeout(() => {
+          updatePickerLandscapeClass();
+          sizePickerToMap();
+        }, 100);
+      }
+    });
+  };
 
-  // Clear buttons
-  clearButtonEl?.addEventListener("click", () => {
-    startId = "";
-    endId = "";
-    fromSelectionEl.textContent = "Search here";
-    toSelectionEl.textContent = "Choose destination";
-    updateButtons();
-    notifySelectionChange();
-  });
+  const bindSelectionEvents = () => {
+    fromTriggerEl?.addEventListener("click", () => openPicker("from"));
+    toTriggerEl?.addEventListener("click", () => openPicker("to"));
+    clearButtonEl?.addEventListener("click", clearSelection);
+    swapButtonEl?.addEventListener("click", swapSelection);
+    previewButtonEl?.addEventListener("click", () => onPreview?.());
+  };
 
-  // Swap
-  swapButtonEl?.addEventListener("click", () => {
-    if (!startId || !endId) return;
-    const prevStart = startId;
-    startId = endId;
-    endId = prevStart;
-    const startPoi = getPoiById(startId);
-    const endPoi = getPoiById(endId);
-    fromSelectionEl.textContent = startPoi ? formatPoiShort(startPoi) : "Choose start";
-    toSelectionEl.textContent = endPoi ? formatPoiShort(endPoi) : "Choose destination";
-    updateButtons();
-    notifySelectionChange();
-  });
+  // -------- Initialization --------
 
-  previewButtonEl?.addEventListener("click", () => onPreview?.());
+  bindFilterEvents();
+  bindPickerEvents();
+  bindGlobalEvents();
+  bindSelectionEvents();
 
-  // Initial
-  fromSelectionEl.textContent = "Search here";
-  toSelectionEl.textContent = "Choose destination";
+  setupFilterControls();
+  setupCategoryChips();
+  if (fromSelectionEl) fromSelectionEl.textContent = "Search here";
+  if (toSelectionEl) toSelectionEl.textContent = "Choose destination";
   updateButtons();
   notifySelectionChange();
-
-  return {
-    setStart: (poiId) => setStart(poiId),
-    setDestination: (poiId) => setDestination(poiId),
-    getCurrentSelection: () => ({ startId, endId, domainType: filterType, openNowOnly: filterOpenNow })
-  };
 }

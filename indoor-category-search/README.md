@@ -28,19 +28,19 @@ Build a usable indoor start/destination experience, including filtering and a ro
 
 ## Methodology
 I have implemented the requirements and updated existing files. To make the code more readable, I extracted some of the logic into the route preview files.
-To implement it, I used Cursor IDE and its AI features, but it is not vibe-coded. Rather, I first started in Plan mode and described exactly the features I wanted. After a couple of iterations, I ensured that the plan indeed matched what I intended the final result to look like. I instructed Cursor to implement the plan and iteratively worked with it to improve the functionality. I read every single line of generated code and manually made changes that did not fit my coding style. Specifically, I worked on making the code readable for humans, something that AI does not necessarily produce out of the box.
+To implement it, I used Cursor IDE and its AI features, but it is not vibe-coded. Rather, it is planned and iteratively built to improve the functionality, and maintain code readability.
 
 
-## Limitations
-- **Target Devices**: As instructed in the requirements section, I only focused on iPhone-sized devices (both portrait and landscape). As a result, when you run it on your machine and go to the URL, you will notice that since the screen is large, it shows the landscape mode. However, once you switch to mobile view (right-click, then inspect), you will see portrait mode.
-- **Missing Data**: The data.json file appeared to have missing information.
-  - For example, an elevator was on one floor but not on other floors, or a connector was in one building but not in other buildings. Therefore, I updated the data and fixed some of these cases for testing purposes. For example, I added data to connect some floors, like the A-Block Elevator on floor 1 and floor 2 in building 101. There was a skywalk connector in building 102 on floor 2. I added the same data to building 103, floor 2, to create an available route between buildings 101-103.
-  - Furthermore, there was no floor plan for the building, so when creating a route, I simply drew a straight line.
+## Supported Devices
+As instructed in the requirements section, I only focused on iPhone-sized devices (both portrait and landscape). As a result, when you run it on your machine and go to the URL, you may notice that since the screen is large, it shows the landscape mode. However, once you switch to mobile view (right-click, then inspect), you will see portrait mode.
+
+## Assumptions
+The data.json file appeared to have missing information. For example, an elevator was on one floor but not on other floors, or a connector was in one building but not in other buildings. Therefore, I updated the data and fixed some of these cases for testing purposes. I added data to connect some floors, like the A-Block Elevator on floor 1 and floor 2 in building 101. There was a skywalk connector in building 102 on floor 2. I added the same data to building 103, floor 2, to create an available route between buildings 101-103.
+Furthermore, there was no floor plan for the building, so when creating a route, I simply drew a straight line.
 
 
 ## Features
-
-In all the following features, I have used ARIA labels to provide an accessible solution. I tested it with Lighthouse and got 100 on both accessibility and best practices.
+In all the following features, I have used ARIA Accessibility labels to provide an accessible solution. I tested it with the Lighthouse Accessibility Checker tool and got 100 on both accessibility and best practices.
 
 After the user selects the source or destination, a modal opens that lets the user choose the location using various filters. The primary way of searching is by typing in the search box. Currently, it performs a simple substring match, but given more time, it can be improved to use fuzzy matching. Furthermore, a quick access panel is provided to filter for popular POIs. By expanding the filter menu, the user can also filter the results based on the building number, floor, POI category, and POI type. To make the result list informative, it includes each POI's name, category, building number, and floor. Also, each POI's information, like open/closed status and rating value, is shown to the user. At the moment, all matching results are shown instead of showing only the top 10. Given more time, this can be changed to a pagination style of output. The user can swap the order of the source and destination by clicking on the swap button.
 

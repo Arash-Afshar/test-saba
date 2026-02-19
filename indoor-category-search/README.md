@@ -24,48 +24,48 @@ Build a usable indoor start/destination experience, including filtering and a ro
 - Data is located in `data.json`.
 - You should not introduce external libraries, but you may briefly describe which libraries you would use and why if they were allowed.
 
-## Explanations
-- This experience is a responsive and optimized for iPhone-sized devices (iPhone X and upper versions) in both portrait and landscape. In previous versions it works in portrait mode well, but for landscape I need more time to improve it.
+# Explanation of the Deliverable
 
-- User in the search panel can select the start and destination point. When user selects the start/destination input boxes, a picker sheet opens and user can both search for the POI's name and, selects from all available POI's list. A quick access panel is provided for popular POIs. A filter panel is implemented. User can filter the results base on the building number, Floor, POI's category and type. The results list includes each POIs' name, category, building number, and floor. Also, each POIs information data like close/open and rating value is shown that user be more informative about the area. - All matching results are shown, instead of showing only top 10, etc.
+## Methodology
+I have implemented the requirements and updated existing files. To make the code more readable, I extracted some of the logic into the route preview files.
+To implement it, I used Cursor IDE and its AI features, but it is not vibe-coded. Rather, I first started in Plan mode and described exactly the features I wanted. After a couple of iterations, I ensured that the plan indeed matched what I intended the final result to look like. I instructed Cursor to implement the plan and iteratively worked with it to improve the functionality. I read every single line of generated code and manually made changes that did not fit my coding style. Specifically, I worked on making the code readable for humans, something that AI does not necessarily produce out of the box.
 
-
-- In search panel switch button is provided to change the start/ destination easily.
-
-- To see the route between start/destination. user clicks the View route button and to reset the start/destination clicks the clear button. Start POI turns to green, and destination POI turns to red.
-
-- When user click on the POIs on the map, a popup box appears and shows the POIs' image, website, working days/hours, opening status, rating if they exist. 
-
-- When start/destination are selected and route found, the distance of whole path appears. 
-
-- Route information box shows the steps to take from start-destination with a short sentence with path length to the next step. To see the next step, user clicks the next button, and it will show the next information sentence. There is also a previous button to see the previous step. When a route has multiple stapes, a green circle is drawn around the current POI to provide an easier view of the current state. When user arrives to the destination a popup box appears and show the success travel done. If there is no route found, a popup box appears around no route found to inform the user.
-
-- Euclidean distance is used for distance calculation.
-- The calculateDistance function estimates the distance between two latitude/longitude points by converting degree differences into meters and applying the Euclidean distance formula, which is accurate enough for small indoor areas. The normalizeCoordinates function converts real-world geographic coordinates of POIs into scaled SVG screen coordinates, ensuring they fit properly within a defined map boundary while maintaining their relative spatial positions.
-
-- We assume that between two buildings, there is at most one connector. In the code, it uses two graphs for indoor routing:
-    - A building graph
-    - A floor graph
-    The building graph has one node per building and connects buildings that share a connector POI with the same name. BFS on this graph gives the sequence of buildings and connectors for cross-building routes. 
-    The floor graph handles movement within a building. Nodes are floor IDs, and floors are connected if they share a vertical link. A weighted shortest-path search prefers elevators over stairs, generating steps like take elevator/stairs to next floor.
-
-In some parts, I used Cursor (AI-powered code editor) to implement some parts easier and improve code quality.
 
 ## Limitations
+- **Target Devices**: As instructed in the requirements section, I only focused on iPhone-sized devices (both portrait and landscape). As a result, when you run it on your machine and go to the URL, you will notice that since the screen is large, it shows the landscape mode. However, once you switch to mobile view (right-click, then inspect), you will see portrait mode.
+- **Missing Data**: The data.json file appeared to have missing information.
+  - For example, an elevator was on one floor but not on other floors, or a connector was in one building but not in other buildings. Therefore, I updated the data and fixed some of these cases for testing purposes. For example, I added data to connect some floors, like the A-Block Elevator on floor 1 and floor 2 in building 101. There was a skywalk connector in building 102 on floor 2. I added the same data to building 103, floor 2, to create an available route between buildings 101-103.
+  - Furthermore, there was no floor plan for the building, so when creating a route, I simply drew a straight line.
 
-- According to the limitation in data regarding the building map, I could not draw the map building. As no other data is provided about the building corridors, the path is a straight line between POIs.
 
-- There was limited data for access points between building floors and access to other buildings. (An access point must be common and exist for other floors to be connected). For testing the process, I added some data to connect some floors like A-Block Elevator in floo1 and floor 2 in building 101. There was a skywalk connector in building 102 on floor 2. I added the same data to building 103 floor 2 to create an available route between building 101-103.
+## Features
+
+In all the following features, I have used ARIA labels to provide an accessible solution. I tested it with Lighthouse and got 100 on both accessibility and best practices.
+
+After the user selects the source or destination, a modal opens that lets the user choose the location using various filters. The primary way of searching is by typing in the search box. Currently, it performs a simple substring match, but given more time, it can be improved to use fuzzy matching. Furthermore, a quick access panel is provided to filter for popular POIs. By expanding the filter menu, the user can also filter the results based on the building number, floor, POI category, and POI type. To make the result list informative, it includes each POI's name, category, building number, and floor. Also, each POI's information, like open/closed status and rating value, is shown to the user. At the moment, all matching results are shown instead of showing only the top 10. Given more time, this can be changed to a pagination style of output. The user can swap the order of the source and destination by clicking on the swap button.
+
+
+Once the user has chosen the start and destination locations and clicks on the preview route button, the route information is shown. Since this is an indoor routing application, I chose to show the route in segments, and the user clicks to see the next or previous segment. There is one segment per floor and one segment per connector type (elevator, stairs, building connector, etc.). Furthermore, when there is an option to take the stairs or the elevator, I prioritized the elevator (of course, this can be changed if, instead of accessibility, the priority is environmental). Moreover, when users click on the POIs on the map, a popup box appears and shows the POI's image, website, working days/hours, opening status, and rating, if they exist.
+
+
+
+## Route Finding Details
+The calculateDistance function estimates the distance between two latitude/longitude points by converting degree differences into meters and applying the Euclidean distance formula, which is accurate enough for small indoor areas. The normalizeCoordinates function converts real-world geographic coordinates of POIs into scaled SVG screen coordinates, ensuring they fit properly within a defined map boundary while maintaining their relative spatial positions.
+
+We assume that between two buildings, there is at most one connector. In the code, indoor routing uses two graphs:
+  - A building graph
+  - A floor graph
+
+The building graph has one node per building and connects buildings that share a connector POI with the same name. BFS on this graph gives the sequence of buildings and connectors for cross-building routes. The floor graph handles movement within a building. Nodes are floor IDs, and floors are connected if they share a vertical link. A weighted shortest-path search prefers elevators over stairs, generating steps like taking an elevator/stairs to the next floor.
+
+
 
 ## Future improvements
 
-- We can add tap option on the POIs. In this case user can selects the start/destination POIs without only typing.
-
-- In the requirement it was mentioned to be responsive for iPhone devices. In the future and having more time, we can make it responsive to more devices and webs.
-
-- Using building blueprints more detailed building map and route will be implemented.
-
-- In the future, we will be able to add crowd data and show the crowded areas on the route and suggest less crowded route.
+- Using building blueprints and a more detailed building map, the routing can be enhanced to take the plan into account instead of showing a straight line.
+- At the moment the user cannot interact with the map to choose start and destination. This can be added in future versions.
+- In the requirements, it was mentioned that it should be responsive for iPhone-sized devices. In the future, we can extend it to support the web as well.
+- In the future, we will be able to add crowd data, show crowded areas on the route, and suggest a less crowded route.
 
 ## If Libraries Were Allowed
 
@@ -75,5 +75,5 @@ In some parts, I used Cursor (AI-powered code editor) to implement some parts ea
 - Bootstrap - CSS Framework:
     To improve development speed and maintain design consistency, I would consider Bootstrap. This framework provides predefined utility classes and responsive design systems, which reduce repetitive CSS and improve maintainability.
 
-- React Router - Routing Library:
-    Routing Library: For navigation management in a single-page application, I would use a routing library such as React Router to enable structured, declarative routing instead of manually showing and hiding views.
+- Enhanced Maps
+    I would use the map library that you have shown in `feature-enhancement/image.png` instead of the white screen with dots that I currently have.

@@ -3,7 +3,7 @@
   --bg: #f6f7fb;
   --card: #ffffff;
   --text: #1d1f25;
-  --muted: #6b7280;
+  --muted: #4b5563;
   --primary: #6d28d9;
   --border: #e5e7eb;
   --shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
@@ -794,6 +794,7 @@ body {
   gap: 8px;
   padding: 4px 6px;
   background: var(--bg);
+  color: var(--text);
   border-radius: 8px;
 }
 
@@ -912,11 +913,11 @@ body {
 }
 
 .start-point .point-label {
-  color: #10b981;
+  color: #047857;
 }
 
 .end-point .point-label {
-  color: #ef4444;
+  color: #b91c1c;
 }
 
 .route-distance {
